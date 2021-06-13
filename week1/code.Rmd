@@ -1,0 +1,64 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(ggforce)
+```
+
+```{r}
+hlito <- function(rows, cols) {
+  df <- crossing(x = 1:cols, y = 1:rows) %>% 
+    mutate(id = row_number())
+  
+  squres <- df %>% 
+    transmute(
+      id,
+      x1 = x+1, x2 = x, x3 = x,   x4 = x+1,
+      y1 = y  , y2 = y, y3 = y+1, y4 = y+1,
+      ) %>%
+    pivot_longer(cols = -id, names_to = "coord") %>%
+    mutate(coord = str_extract(coord, "^.")) %>%
+    pivot_wider(id_cols = id, names_from = "coord", values_from = "value", values_fn = list) %>%
+    unnest(cols = c(x, y))
+  
+  arcs <- df %>% 
+    transmute(
+      id,
+      x0    = x,
+      y0    = y+1,
+      r     = 0.5,
+      start = 0.5*pi,
+      end   = pi
+    )
+  
+  dfs <- list(squres, arcs)
+  
+  dfs
+}
+```
+
+```{r}
+testing <- hlito(rows = 3, cols = 3)
+testing
+
+p <- ggplot() +
+  geom_polygon(
+    data = testing[[1]],
+    aes(x = x, y = y, group = id),
+    fill = NA, color = "#000000"
+    ) +
+  geom_arc(
+    data = testing[[2]],
+    aes(x0 = x0, y0 = y0, r = r, start = start, end = end)
+  ) +
+  coord_equal()
+
+p + ggsave(here::here("week1", "progress.png"))
+```
