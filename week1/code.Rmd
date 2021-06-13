@@ -13,22 +13,22 @@ library(ggforce)
 ```
 
 ```{r}
-hlito <- function(rows, cols) {
+hlito <- function(rows, cols, pierce_amt = 0.1) {
   df <- crossing(x = 1:cols, y = 1:rows) %>% 
     mutate(id = row_number())
   
-  squres <- df %>% 
+  squres <- df %>%
     transmute(
       id,
       x1 = x+1, x2 = x, x3 = x,   x4 = x+1,
       y1 = y  , y2 = y, y3 = y+1, y4 = y+1,
-      ) %>%
+    ) %>%
     pivot_longer(cols = -id, names_to = "coord") %>%
     mutate(coord = str_extract(coord, "^.")) %>%
     pivot_wider(id_cols = id, names_from = "coord", values_from = "value", values_fn = list) %>%
     unnest(cols = c(x, y))
   
-  arcs <- df %>% 
+  big_arcs <- df %>%
     transmute(
       id,
       x0    = x,
@@ -38,27 +38,100 @@ hlito <- function(rows, cols) {
       end   = pi
     )
   
-  dfs <- list(squres, arcs)
+  small_arcs <- df %>%
+    transmute(
+      id,
+      x0    = x+1,
+      y0    = y,
+      r     = 0.5,
+      start = -0.25*pi,
+      end   = -0.50*pi
+    )
   
+  diags <- df %>%
+    mutate(
+      xend = map_dbl(x, ~ .x+pierce_amt), # link this with quarter circle to make it more interseting
+      x    = x+1,
+      yend = map_dbl(y, ~ .x+1-pierce_amt),
+      y    = y
+    )
+  
+  create_notches <- function(x, y, id) {
+    dat <- tibble(x = x, y = y, id = id)
+    
+    left <- map_dfr(1:5, ~dat) %>% 
+      mutate(
+        x    = x + 0.1,
+        xend = x + 0.225,
+        prop = accumulate(seq(from = 5, to = 2), ~ (.y-1)/5 * 0.63, .init = 0.9), 
+        yend = y + prop*0.4,
+        y    = yend
+      ) %>% 
+      mutate(clr = c("#7FA037", "#C25A50", "#144179", "#655D5B", "#C25A50"))
+    
+    right <- map_dfr(1:4, ~dat) %>% 
+      mutate(
+        xend = x + 0.9,
+        x    = xend - 0.23,
+        prop = accumulate(seq(from = 2, to = 4), ~ (.y+1)/4 * 0.37, .init = 1.2), 
+        yend = y+1 -prop*0.4,
+        y    = yend
+      )  %>% 
+      mutate(clr = c("#C25A50", "#655D5B", "#144179", "#7FA037"))  
+    
+    left %>% rbind(right)
+  }
+  
+  notches <- df %>% 
+    pmap_dfr(create_notches)
+  
+
+  dfs <- list(squres, big_arcs, small_arcs, diags, notches)
   dfs
 }
 ```
 
 ```{r}
-testing <- hlito(rows = 3, cols = 3)
-testing
+testing <- hlito(rows = 3, cols = 3, pierce_amt = 0.25)
+
 
 p <- ggplot() +
   geom_polygon(
     data = testing[[1]],
     aes(x = x, y = y, group = id),
     fill = NA, color = "#000000"
-    ) +
+  ) +
   geom_arc(
     data = testing[[2]],
-    aes(x0 = x0, y0 = y0, r = r, start = start, end = end)
+    aes(x0 = x0, y0 = y0, r = r, start = start, end = end),
+    color = "#bfb072",
+    size = 1.5
   ) +
-  coord_equal()
+  geom_arc(
+    data = testing[[3]],
+    aes(x0 = x0, y0 = y0, r = r, start = start, end = end),
+    color = "#0b4278",
+    size = 1.5
+  ) +
+  geom_segment(
+    data = testing[[4]],
+    aes(x = x, xend = xend, y = y, yend = yend),
+    color = "#000000",
+    size = 1.5
+  ) +
+  geom_segment(
+    data = testing[[5]],
+    aes(x = x, xend = xend, y = y, yend = yend),
+    color = testing[[5]]$clr,
+    size = 1
+  ) +
+  coord_equal() +
+  theme_void() +
+  theme(
+    plot.background = element_rect(fill = "#e1dcc9")
+  )
+p
 
-p + ggsave(here::here("week1", "progress.png"))
+testing
+# p + ggsave(here::here("week1", "progress.png"))
 ```
