@@ -12,12 +12,46 @@ library(tidyverse)
 library(ggforce)
 ```
 
+Our workflow:
+  1. `create_shapes` returns a list of data frames that has coords for different geoms
+  2. plot each df in the output list separately
+
+This function returns a list of 5 dfs, each containing 
+coordinates for various geoms, (x/y/xend, ... depending on geom)
+which will be individually plotted as a layer in ggplot
+
+# Creating Shapes
+
 ```{r}
-hlito <- function(rows, cols, pierce_amt = 0.1) {
-  df <- crossing(x = 1:cols, y = 1:rows) %>% 
-    mutate(id = row_number())
+create_shapes <- function(rows, cols, pierce_amt = 0.1) {
   
-  squres <- df %>%
+  # Set up grid (this will be a starting point of all dfs)
+  df <- crossing(x = 1:cols, y = 1:rows) %>% 
+    mutate(id = row_number()) %>% 
+    mutate(flip = map_dbl(id, ~sample(1:4, 1))) %>%
+    mutate(across(everything(), as.double))
+  
+  # We're going to make the 5 data frames, each representing:
+  #    1. Square outline of the tile as a guide (won't actually plot this, but super useful)
+  #    2. Golden Arc 
+  #    3. Blue Arc
+  #    4. Black diagonal line 
+  #    5. Notches (left & right sides will be made separately)
+  
+  # After these are created, we randomly rotate the tiles clockwise in 0/90/180/270 degree intervals.
+  # Squares don't need to be moved.
+  # Unfortunately it's all manually coded lmao 
+  # `flip` column in the grid (df above) will be one of 1/2/3/4
+  # depending on this number, I flip the tile 0/90/180/270 degrees clockwise.
+  
+################################################
+################################################
+####------------Geom generations------------####
+################################################
+################################################
+  
+  # 1. Square outline of the "tile" (geom_polygon)
+  squares <- df %>%
     transmute(
       id,
       x1 = x+1, x2 = x, x3 = x,   x4 = x+1,
@@ -28,110 +62,320 @@ hlito <- function(rows, cols, pierce_amt = 0.1) {
     pivot_wider(id_cols = id, names_from = "coord", values_from = "value", values_fn = list) %>%
     unnest(cols = c(x, y))
   
+  # 2. Golden arc (geom_arc)
   big_arcs <- df %>%
-    transmute(
-      id,
-      x0    = x,
-      y0    = y+1,
-      r     = 0.5,
-      start = 0.5*pi,
-      end   = pi
+    mutate(
+      x0 = imap_dbl(
+        flip,
+        ~ case_when(
+          .x == 1 ~ df[[.y, "x"]],
+          .x == 2 ~ df[[.y, "x"]] + 1,
+          .x == 3 ~ df[[.y, "x"]] + 1,
+          .x == 4 ~ df[[.y, "x"]]
+        )
+      ),
+      y0 = imap_dbl(
+        flip,
+        ~ case_when(
+          .x == 1 ~ df[[.y, "y"]] + 1,
+          .x == 2 ~ df[[.y, "y"]] + 1,
+          .x == 3 ~ df[[.y, "y"]],
+          .x == 4 ~ df[[.y, "y"]]
+        )
+      ),
+      start = imap_dbl(
+        flip,
+        ~ case_when(
+          .x == 1 ~ 0.5 * pi,
+          .x == 2 ~       pi,
+          .x == 3 ~ 1.5 * pi,
+          .x == 4 ~ 2   * pi
+        )
+      ),
+      end = imap_dbl(
+        flip,
+        ~ case_when(
+          .x == 1 ~       pi,
+          .x == 2 ~ 1.5 * pi,
+          .x == 3 ~ 2   * pi,
+          .x == 4 ~ 2.5 * pi
+        )
+      ),
+      r = 0.5
     )
   
-  small_arcs <- df %>%
-    transmute(
-      id,
-      x0    = x+1,
-      y0    = y,
-      r     = 0.5,
-      start = -0.25*pi,
-      end   = -0.50*pi
+  # 3. Blue arc (geom_arc)
+  small_arcs <- df %>%   
+    mutate(
+      x0 = imap_dbl(
+        flip,
+        ~ case_when(
+          .x == 1 ~ df[[.y, "x"]] + 1,
+          .x == 2 ~ df[[.y, "x"]],
+          .x == 3 ~ df[[.y, "x"]],
+          .x == 4 ~ df[[.y, "x"]] + 1
+        )
+      ),
+      y0 = imap_dbl(
+        flip,
+        ~ case_when(
+          .x == 1 ~ df[[.y, "y"]],
+          .x == 2 ~ df[[.y, "y"]],
+          .x == 3 ~ df[[.y, "y"]] + 1,
+          .x == 4 ~ df[[.y, "y"]] + 1
+        )
+      ),
+      start = imap_dbl(
+        flip,
+        ~ case_when(
+          .x == 1 ~ -0.25 * pi,
+          .x == 2 ~  0,
+          .x == 3 ~  0.75 * pi,
+          .x == 4 ~         pi
+        )
+      ),
+      end = imap_dbl(
+        flip,
+        ~ case_when(
+          .x == 1 ~ -0.5  * pi,
+          .x == 2 ~  0.25 * pi,
+          .x == 3 ~  0.5  * pi,
+          .x == 4 ~  1.25 * pi
+        )
+      ),
+      r = 0.5
     )
   
+  # 4. Black diagonal line (geom_segment)
   diags <- df %>%
     mutate(
-      xend = map_dbl(x, ~ .x+pierce_amt), # link this with quarter circle to make it more interseting
-      x    = x+1,
-      yend = map_dbl(y, ~ .x+1-pierce_amt),
-      y    = y
+      xend = imap_dbl(
+        flip,
+        ~ case_when(
+          .x == 1 ~ df[[.y, "x"]] +     pierce_amt,
+          .x == 2 ~ df[[.y, "x"]] + 1 - pierce_amt,
+          .x == 3 ~ df[[.y, "x"]] + 1 - pierce_amt,
+          .x == 4 ~ df[[.y, "x"]] +     pierce_amt
+        )
+      ),
+      x = imap_dbl(
+        flip,
+        ~ case_when(
+          .x == 1 ~ df[[.y, "x"]] + 1,
+          .x == 2 ~ df[[.y, "x"]],
+          .x == 3 ~ df[[.y, "x"]],
+          .x == 4 ~ df[[.y, "x"]] + 1
+        )
+      ),
+      yend = imap_dbl(
+        flip,
+        ~ case_when(
+          .x == 1 ~ df[[.y, "y"]] + 1 - pierce_amt,
+          .x == 2 ~ df[[.y, "y"]] + 1 - pierce_amt,
+          .x == 3 ~ df[[.y, "y"]] +     pierce_amt,
+          .x == 4 ~ df[[.y, "y"]] +     pierce_amt
+        )
+      ),
+      y = imap_dbl(
+        flip,
+        ~ case_when(
+          .x == 1 ~ df[[.y, "y"]],
+          .x == 2 ~ df[[.y, "y"]],
+          .x == 3 ~ df[[.y, "y"]] + 1,
+          .x == 4 ~ df[[.y, "y"]] + 1
+        )
+      )
     )
   
-  create_notches <- function(x, y, id) {
-    dat <- tibble(x = x, y = y, id = id)
+  # 5. Notches
+  
+  ## K this was a little tedious. (had to create left/right notches separately)
+  
+  ## Start from the grid, duplicate each row 5 times for left hand side (4/right), then
+  ## edit each row to draw the notches.
+  #### Draw the line that's away from the other lines first, then
+  #### draw the rest of the lines with even space between them. 
+  
+  create_notches <- function(x, y, id, flip, left_margin = 0.1, line_length = 0.3, cram = 0.4) {
+    # This is just for convenience (recreating same df we're mapping over, cuz i needed to use pmap_dfr)
+    dat <- tibble(x = x, y = y, id = id, flip = flip)
+    
+    ## Left-side notches
     
     left <- map_dfr(1:5, ~dat) %>% 
+      mutate(prop = accumulate(seq(from = 5, to = 2), ~ (.y-1)/5 * 0.63, .init = 0.9))
+    
+    left <- left %>% 
       mutate(
-        x    = x + 0.1,
-        xend = x + 0.225,
-        prop = accumulate(seq(from = 5, to = 2), ~ (.y-1)/5 * 0.63, .init = 0.9), 
-        yend = y + prop*0.4,
-        y    = yend
+        x = imap_dbl(
+          flip,
+          ~ case_when(
+            .x == 1 ~ left[[.y, "x"]] + left_margin,
+            .x == 2 ~ left[[.y, "x"]] + (left[[.y, "prop"]]*cram),
+            .x == 3 ~ left[[.y, "x"]] + 1 - left_margin,
+            .x == 4 ~ left[[.y, "x"]] + 1 - (left[[.y, "prop"]]*cram)
+          )
+        ),
+        xend = imap_dbl(
+          flip,
+          ~ case_when(
+            .x == 1 ~ left[[.y, "x"]] + line_length,
+            .x == 2 ~ left[[.y, "x"]] + (left[[.y, "prop"]]*cram),
+            .x == 3 ~ left[[.y, "x"]] + 1 - line_length,
+            .x == 4 ~ left[[.y, "x"]] + 1 - (left[[.y, "prop"]]*cram)
+          )
+        ),
+        yend = imap_dbl(
+          flip,
+          ~ case_when(
+            .x == 1 ~ left[[.y, "y"]] + (left[[.y, "prop"]]*cram),
+            .x == 2 ~ left[[.y, "y"]] + 1 - line_length,
+            .x == 3 ~ left[[.y, "y"]] + 1 - (left[[.y, "prop"]]*cram),
+            .x == 4 ~ left[[.y, "y"]] + line_length
+          )
+        )
+      ) 
+    
+    left <- left %>% 
+      mutate(
+        y = imap_dbl(
+          flip,
+          ~ case_when(
+            .x == 1 ~ left[[.y, "yend"]],
+            .x == 2 ~ left[[.y, "y"]] + 1 - left_margin,
+            .x == 3 ~ left[[.y, "yend"]],
+            .x == 4 ~ left[[.y, "y"]] + left_margin
+          )
+        )
       ) %>% 
       mutate(clr = c("#7FA037", "#C25A50", "#144179", "#655D5B", "#C25A50"))
     
-    right <- map_dfr(1:4, ~dat) %>% 
+   ## Right-side notches
+    
+    right <- map_dfr(1:4, ~dat) %>%
+      mutate(prop = accumulate(seq(from = 2, to = 4), ~ (.y+1)/4 * 0.37, .init = 1.2))
+    
+    right <- right %>% 
       mutate(
-        xend = x + 0.9,
-        x    = xend - 0.23,
-        prop = accumulate(seq(from = 2, to = 4), ~ (.y+1)/4 * 0.37, .init = 1.2), 
-        yend = y+1 -prop*0.4,
-        y    = yend
-      )  %>% 
-      mutate(clr = c("#C25A50", "#655D5B", "#144179", "#7FA037"))  
+        xend = imap_dbl(
+          flip,
+          ~ case_when(
+            .x == 1 ~ right[[.y, "x"]] + (1-left_margin),
+            .x == 2 ~ right[[.y, "x"]] + 1 - (right[[.y, "prop"]]*cram),
+            .x == 3 ~ right[[.y, "x"]] + left_margin,
+            .x == 4 ~ right[[.y, "x"]] + (right[[.y, "prop"]]*cram)
+          )
+        ),
+        yend = imap_dbl(
+          flip,
+          ~ case_when(
+            .x == 1 ~ right[[.y, "y"]] + 1 - (right[[.y, "prop"]]*cram),
+            .x == 2 ~ right[[.y, "y"]] + left_margin,
+            .x == 3 ~ right[[.y, "y"]] + (right[[.y, "prop"]]*cram),
+            .x == 4 ~ right[[.y, "y"]] + 1 - left_margin
+          )
+        )
+      )
+    right <- right %>% 
+      mutate(
+        x = imap_dbl(
+          flip,
+          ~ case_when(
+            .x == 1 ~ right[[.y, "xend"]] - line_length + left_margin,
+            .x == 2 ~ right[[.y, "xend"]],
+            .x == 3 ~ right[[.y, "x"]] + line_length,
+            .x == 4 ~ right[[.y, "xend"]]
+          )
+        ),
+        y = imap_dbl(
+          flip,
+          ~ case_when(
+            .x == 1 ~ right[[.y, "yend"]],
+            .x == 2 ~ right[[.y, "yend"]] + line_length - left_margin,
+            .x == 3 ~ right[[.y, "yend"]],
+            .x == 4 ~ right[[.y, "yend"]] - line_length + left_margin
+          )
+        )
+      )
+    
+    right <- right %>%
+      mutate(clr = c("#C25A50", "#655D5B", "#144179", "#7FA037"))
     
     left %>% rbind(right)
   }
   
-  notches <- df %>% 
+  notches <- df %>%
     pmap_dfr(create_notches)
   
-
-  dfs <- list(squres, big_arcs, small_arcs, diags, notches)
+  dfs <- list(
+    squares    = squares, 
+    big_arcs   = big_arcs,
+    small_arcs = small_arcs,
+    diags      = diags,
+    notches    = notches
+  )
+  
   dfs
 }
 ```
 
-```{r}
-testing <- hlito(rows = 3, cols = 3, pierce_amt = 0.25)
+# Plotting
 
+```{r}
+set.seed(1)
+shapes <- create_shapes(rows = 6, cols = 6, pierce_amt = 0.25)
 
 p <- ggplot() +
-  geom_polygon(
-    data = testing[[1]],
-    aes(x = x, y = y, group = id),
-    fill = NA, color = "#000000"
-  ) +
+  # geom_polygon(
+  #   data = shapes[["squares"]],
+  #   aes(x = x, y = y, group = id),
+  #   fill = NA, color = "#000000"
+  # ) +
   geom_arc(
-    data = testing[[2]],
+    data = shapes[["big_arcs"]],
     aes(x0 = x0, y0 = y0, r = r, start = start, end = end),
     color = "#bfb072",
     size = 1.5
   ) +
   geom_arc(
-    data = testing[[3]],
+    data = shapes[["small_arcs"]],
     aes(x0 = x0, y0 = y0, r = r, start = start, end = end),
     color = "#0b4278",
     size = 1.5
   ) +
   geom_segment(
-    data = testing[[4]],
+    data = shapes[["diags"]],
     aes(x = x, xend = xend, y = y, yend = yend),
     color = "#000000",
-    size = 1.5
+    size = 0.5
   ) +
   geom_segment(
-    data = testing[[5]],
+    data = shapes[["notches"]],
     aes(x = x, xend = xend, y = y, yend = yend),
-    color = testing[[5]]$clr,
-    size = 1
+    color = shapes[["notches"]]$clr,
+    size = 1.2
   ) +
+  # geom_point(
+  #   data = shapes[["notches"]],
+  #   aes(x = x, y = y),
+  #   # color = shapes[["notches"]]$clr,
+  #   size = 2
+  # ) +
   coord_equal() +
   theme_void() +
   theme(
-    plot.background = element_rect(fill = "#e1dcc9")
+    plot.background = element_rect(fill = "#e1dcc9", color = "#e1dcc9")
   )
 p
 
-testing
 # p + ggsave(here::here("week1", "progress.png"))
 ```
+
+# Saving
+
+```{r}
+# pre_trim <- magick::image_read(here::here("week1", "progress.png"))
+# post_trim <- magick::image_trim(pre_trim)
+# magick::image_write(post_trim, here::here("week1", "final.png"))
+```
+
