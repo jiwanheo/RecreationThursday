@@ -1,0 +1,273 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Hey everyone!
+
+I worked two separate parts for this piece:
+  1. Squiggly lines in the background
+  2. Smearing ink blobs in the middle-
+
+For #2, I followed Tyler Hobb's instruction. I'm just going to use the code that I worked out here: https://github.com/jiwanheo/my-aRt/blob/master/ink-smear/ink-smear.Rmd
+
+
+# 1. Squiggly lines
+Draw a Cosine curve, connect the 2 ends of the curve
+to the left/right corners, to return a rectangle, with squiggly top.
+```{r}
+# We're going to draw a bunch of identical cosine curves, with 
+# different offsets, so we can spread them out,
+# and colour them purple/green depending on if they're on the wrong side of 0 
+
+draw_curve <- function(n, amp, freq, val_offset) {
+  len_out <- 100
+  max_val <- if(val_offset < 0){15} else{-15} # This is to determine which left/right end the polygon should be based off
+  nrange <- seq(1, n, length.out = len_out)  
+  
+  clr <- if(val_offset < 0){
+    sample(c("a", "a", "a", "a", "a", "a", "b"), size = 1)} #color selection on each side of the background.
+  else{
+    sample(c("b", "b", "b", "b", "b", "b", "a"), size = 1)
+  }
+  
+  df <- tibble(
+    curr_pi = nrange,
+    val = amp * cos(curr_pi * freq) + val_offset,
+    clr = clr
+  ) 
+  
+  # These are first and last point of the df, 
+  # That connects the ends of the cos waves
+  # to the bottom left/right corners
+  first_corner <- tibble(
+    curr_pi = 1,
+    val = -max_val,
+    clr = clr
+  )
+  
+  second_corner <- tibble(
+    curr_pi = len_out,
+    val = -max_val,
+    clr = clr
+  )
+  
+  return(
+    first_corner %>% 
+      rbind(df) %>% 
+      rbind(second_corner)
+  )
+}
+
+call_draw_curve <- function(n_lines, n) {
+  df <- tibble(
+    id   = 1:n_lines,
+    n    = n,
+    amp  = 1.87,
+    freq = 0.17
+  ) %>% 
+    mutate(val_offset = map_dbl(id, ~runif(n = 1, min = 1, max = 10) * sample(c(-1, 1), size = 1))) %>% 
+    select(-id)
+  
+  df <- df %>% 
+    pmap(draw_curve)
+  
+  df %>%
+    map(~geom_polygon(data = .x, aes(x = val, y = curr_pi, fill = clr), size = 2, alpha = 0.01))
+}
+
+my_lines <- call_draw_curve(n_lines = 100, n = 100) #Draw 100 cosine curves that spans 0~100
+
+p_ <- ggplot()
+
+for(item in my_lines) {
+  p_ <- p_ + item
+}
+p_ <- p_ +
+  scale_fill_manual(values = c("#854784", "#3f8383")) #Spent a ton of time in this!
+```
+
+# 2. Smearing ink 
+The workflow is:
+
+- Start with a polygon. `gimmie_polygon` gives a regular polygon of n sides.
+- `jutt` all sides of the polygon, out a certain amount.
+- `jutt` the new sides even further, each time resulting in new sides being created.
+- Do this a bunch of times for many polygons (`apply_jutt`) in layers (`soften_edges`)
+- Draw them on top of each other with low opacity.
+
+## 2.1 Base Polygon Generator
+
+```{r}
+library(tidyverse)
+
+# Make a regular polygon. Output is in format of geom_segment
+gimmie_poly <- function(n, start_x = 0, start_y = 0) {
+  start <- tibble(
+    id    = 1:n,
+    angle = 2*pi * id/n,
+    x     = cos(angle) + start_x,
+    y     = sin(angle) + start_y
+  )
+  
+  end <- start %>%
+    select(id, xend = x, yend = y) %>% 
+    mutate(id = ifelse(id == 1, n, (id-1) %% n)) # offsetting row id by 1 
+  
+  res <- start %>% 
+    inner_join(end, by = "id") %>% # joining a df on itself, with offset id
+    arrange(id) %>% 
+    select(x, y, xend, yend) %>% 
+    mutate(prot_multi = sample(c(0.4, 0.5, 0.2, 0.69, 0.42, 0.8, 0.64, 0.379))) 
+    #Protrusion initial control.This controls jutting amounts.
+    
+  res
+}
+```
+
+## 2.2 Jutting (Polygon Transformation)
+
+1. Take an edge of a polygon
+2. Pick a random point along the edge 
+3. Push it out, by some amount of 
+   i)  angle 
+   ii) length (using prot_multi)
+4. Give slight variation to prot_multi, and pass it on to the newly created edges
+
+One iteration of this on a polygon increases the total sides by 1. 
+
+```{r}
+jutt <- function(x, y, xend, yend, prot_multi) {
+  #2. Pick a random point along edge
+  prop  <- rnorm(n = 1, mean = 0.5, sd = 0.5/2)
+  mid_x <- (1-prop)*x + prop*xend
+  mid_y <- (1-prop)*y + prop*yend
+  
+  #3-1. Pick a random angle to protrude off an edge
+  ##### **Find the angle that makes the horizontal line btw (x,y) & (xend,yend)
+  ##### **with arc tangent, and add the angle (btw 1~2pi)
+  angle <- atan2(yend-y, xend-x) + rnorm(n = 1, mean = 1.5, sd = (1.5-1)/4)*pi
+
+  #3-2. Pick the length of protrusion
+  edge_len <- sqrt((xend-x)^2 + (yend-y)^2) 
+  prot_amt <- rnorm(n = 1, mean = edge_len*prot_multi, sd = edge_len*prot_multi/4) #scale protrusion amt with the length of the edge and some `prot_multi` amount
+  mid_xend <- mid_x + prot_amt*cos(angle) 
+  mid_yend <- mid_y + prot_amt*sin(angle)
+
+  #4. Update multiplier and pass on to the resulting edges. 
+  prot_multi <- prot_multi * rnorm(1, mean = 1, sd = (1-0.98)/4)
+  
+  df <- tibble(
+    x    = c(x, mid_xend),
+    y    = c(y, mid_yend),
+    xend = c(mid_xend, xend),
+    yend = c(mid_yend, yend),
+    prot_multi = prot_multi
+  )
+  
+  return(df)
+}
+```
+
+## 2.3 Jutting multiple polygons, multiple times
+
+```{r}
+apply_jutt <- function(dat, n) {# dat is a df containing a polygon
+  for (i in 1:n) {              # we apply `jutt` n times to the df,
+    dat <- dat %>%              # resulting in a polygon that has a lot more sides.
+      pmap_dfr(jutt) 
+  }
+  return(dat)
+}
+```
+
+## 2.4 Softening the edges
+
+1. Start from a base polygon 
+2. Jutt it 3 times 
+3. Make a bunch of `start_pol`, and jutt them 3 more times
+4. But do step 1-3 in clusters. 
+   i) divide n_layers into 3, first gets 1 `base_jutt`, second gets 2, third gets 3.
+   ii) then run those 3 clusters with same `post_jutt`
+
+```{r}
+soften_edges <- function(base_gon, base_jutt, n_layer, post_jutt, alpha, pol_fill, seed, start_x, start_y){
+  my_params <- paste("base_gon", base_gon, "base_jutt", base_jutt, "n_layer", n_layer,"post_jutt", post_jutt, "alpha", alpha, "pol_fill", pol_fill,  "seed", seed, "start_x", start_x, "start_y", start_y)
+  
+  message(my_params)
+  set.seed(seed)
+  # Will store each layer of polygon in a list. Wuddup adv-R
+  
+  polygon_layers <- vector("list", n_layer) 
+  for(i in seq_along(1:n_layer)) {
+    
+    cluster <- i%%base_jutt               #4. define clusters
+    cluster <- if(cluster == 0) {base_jutt} else {cluster}
+
+    poly <- gimmie_poly(base_gon, start_x = start_x, start_y = start_y) %>% #1. Start from base polygon
+      apply_jutt(cluster)                 #2. Jutt it `cluster` times
+    
+    polygon_layers[[i]] <- poly       
+  }
+  
+  polygons_softened <- polygon_layers %>%
+    map(~apply_jutt(.x, post_jutt)) %>%   #3. Jutt all the polygons `base_jutt` times (same for all polygons now)
+    map(~geom_polygon(data = .x, aes(x = x, y = y), alpha = alpha, fill = pol_fill, show.legend = FALSE))
+
+  return(polygons_softened) # Returning a list of geom_polygon's
+}
+```
+
+## 2.5 Plot & save!
+
+```{r}
+df <- tibble(
+  base_gon    = 8,
+  base_jutt   = 3,
+  n_layer     = 100,
+  post_jutt   = 5,
+  alpha       = 0.02,
+  pol_fill    = "#eb7500",
+  seed        = sample(1:1000, size = 3),
+  start_x     = 0,
+  start_y     = seq(20, 40, length.out = 3)
+)
+hi <- df %>%
+  pmap(soften_edges)
+
+for(item in hi) {
+  p_ <- p_ + item
+}
+
+p_ <- p_ +
+  coord_equal(xlim = c(-10, 10), y = c(10, 50)) +
+  theme_void() +
+  theme(
+    plot.background = element_rect(fill = "#eaebe4", color = "#eaebe4"),
+    legend.position = "none"
+  )
+
+ggsave(
+  here::here("week02", "final.png"),
+  p_,
+  device    = ragg::agg_png,
+  res       = 300,
+  units     = "in", # TY everyone in this thread! https://github.com/tidyverse/ggplot2/issues/4347
+  width     = 3000, # this is ACTUALLY pixels
+  height    = 3000, # also pixels
+  limitsize = FALSE # because ggplot2 thinks it's inches
+)
+```
+
+
+
+
+
+
+
+
+
