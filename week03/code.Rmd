@@ -1,0 +1,198 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Actual circles
+
+```{r}
+library(tidyverse)
+
+gimmie_circles <- function(start_x, start_y, incr, amp, min_x=0, max_x=12, min_y=0, max_y=12){
+  num_inwards <- 1 %/% incr
+  
+  df <- tibble(
+    x = start_x,
+    y = start_y,
+    incr = incr,
+    amp = amp,
+    id = 1:num_inwards
+  ) %>% 
+    pmap_dfr(function(x,y,incr,amp,id){
+      tibble(
+        my_id = 1:300,
+        x = ((1 - ((id-1)*incr)) * amp * cos(my_id/300 * 2*pi)) + start_x,
+        y = ((1 - ((id-1)*incr)) * amp * sin(my_id/300 * 2*pi)) + start_y,
+        group_id = factor(id),
+        clr = sample(letters[1:8], 1)
+      )
+    })
+  
+  my_circle <- df %>% 
+    rbind(df %>% filter(my_id == 1))
+
+  # Now the inside-or-outside the box thing
+  
+  my_circle %>% 
+    mutate(x_in_box = map_lgl(x, ~ .x >= min_x & .x <= max_x)) %>% 
+    mutate(y_in_box = map_lgl(y, ~ .x >= min_y & .x <= max_y)) %>%
+    mutate(in_box = x_in_box & y_in_box) %>% 
+    mutate(clr = ifelse(in_box, clr, "z")) %>% 
+    filter(in_box)
+}
+
+circle1 <- gimmie_circles(start_x = 6,  start_y = 0, incr = 0.026, amp = 10)
+circle2 <- gimmie_circles(start_x = 12, start_y = 12, incr = 0.036, amp = 7.5)
+circle3 <- gimmie_circles(start_x = 0,  start_y = 12, incr = 0.031, amp = 6)
+
+my_square <- tibble(
+  x = c(12, 0, 0, 12),
+  y = c(0, 0, 12, 12)
+)
+
+my_palette <- c("#844CA1", "#4F99E6", "#EBCB00", "#36B63A", 
+                "#834DA1", "#5199E3", "#EE1E1B", "#F88112", "#787878")
+names(my_palette) <- c(letters[1:8], "z")
+```
+
+# Jutted polygon layers
+
+```{r}
+gimmie_poly <- function(n=20, start_x = 0, start_y = 0, mag, seed) {
+  set.seed(seed)
+  angle_offset <- runif(1, 0, 2*pi)
+  
+  start <- tibble(
+    id    = 1:n,
+    angle = (2*pi * id/n) + angle_offset,
+    x     = cos(angle) * mag + start_x,
+    y     = sin(angle) * mag + start_y
+  )
+  
+  end <- start %>%
+    select(id, xend = x, yend = y) %>% 
+    mutate(id = ifelse(id == 1, n, (id-1) %% n)) 
+  
+  res <- start %>% 
+    inner_join(end, by = "id") %>% 
+    arrange(id) %>% 
+    select(x, y, xend, yend) %>% 
+    mutate(prot_multi = map_dbl(row_number(), ~runif(n = 1, min = 0.2, max = 0.6))) %>% 
+    mutate(seed = seed)
+  
+  res
+}
+```
+
+```{r}
+jutt <- function(x, y, xend, yend, prot_multi, seed) {
+  set.seed(seed)
+  
+  prop  <- rnorm(n = 1, mean = 0.5, sd = 0.5/2)
+  mid_x <- (1-prop)*x + prop*xend
+  mid_y <- (1-prop)*y + prop*yend
+  
+  angle <- atan2(yend-y, xend-x) + rnorm(n = 1, mean = 1.5, sd = (1.5-1)/4)*pi
+
+  edge_len <- sqrt((xend-x)^2 + (yend-y)^2) 
+  prot_amt <- rnorm(n = 1, mean = edge_len*prot_multi, sd = edge_len*prot_multi/4) * 0.4
+  mid_xend <- mid_x + prot_amt*cos(angle) 
+  mid_yend <- mid_y + prot_amt*sin(angle)
+
+  prot_multi <- prot_multi * rnorm(1, mean = 1, sd = (1-0.2)/4)
+  
+  tibble(
+    x    = c(x, mid_xend),
+    y    = c(y, mid_yend),
+    xend = c(mid_xend, xend),
+    yend = c(mid_yend, yend),
+    prot_multi = prot_multi,
+    seed = seed + 1
+  )
+}    
+```
+
+```{r}
+polygon_setup <- function(start_x, start_y, incr, mag) {
+  num_inwards <- 1 %/% incr
+  
+  df <- tibble(
+    start_x = start_x,
+    start_y = start_y,
+    mag = mag,
+    id = 1:num_inwards
+  ) %>% 
+    mutate(mag = (1 - ((id-1)*incr)) * mag) %>% 
+    select(-id) %>% 
+    mutate(seed = 1:num_inwards)
+  df
+}
+
+#This can be a little more efficient but oh well
+my_df <- tibble( 
+  start_x = c(6, 12, 0),
+  start_y = c(0, 12, 12),
+  incr    = c(0.026, 0.036, 0.031),
+  mag     = c(10, 7.5, 6) 
+)
+
+my_polygons <- my_df %>% 
+  pmap_dfr(polygon_setup) %>% 
+  pmap(gimmie_poly)
+
+apply_jutt <- function(dat, n) {
+  for (i in 1:n) { 
+    dat <- dat %>% 
+      pmap_dfr(jutt)
+  }
+  return(dat)
+}
+
+my_polygons_jutted <- my_polygons %>% 
+  map(~apply_jutt(.x, 7)) %>% 
+  map(~geom_segment(data = .x, aes(x = x, y = y, xend = xend, yend = yend), alpha = 0.3)) 
+
+g <- ggplot() 
+for(item in my_polygons_jutted) {
+  g <- g + item
+}
+```
+
+# Final
+```{r}
+p <- g +
+  geom_polygon(data = my_square, aes(x = x, y = y), fill = "#e8e8e8", color = "#e8e8e8") +
+  geom_path(data = circle1, aes(x = x, y = y, group = group_id, color = clr), size = 2) +
+  geom_path(data = circle2, aes(x = x, y = y, group = group_id, color = clr), size = 2) +
+  geom_path(data = circle3, aes(x = x, y = y, group = group_id, color = clr), size = 2) +
+  geom_polygon(data = my_square, aes(x = x, y = y), fill = NA, color = "#000000", size = 3) +
+  coord_equal(xlim = c(-11, 23), ylim = c(-15, 23)) +
+  scale_color_manual(values = my_palette) +
+  theme_void() +
+  theme(
+    legend.position = "none",
+    plot.background = element_rect(fill = "#e8e8e8", color = "#e8e8e8")
+  )
+
+p
+
+ggsave(
+  here::here("week03", "good-copy.png"),
+  plot      = p,
+  device    = ragg::agg_png,
+  res       = 300,
+  units     = "in", 
+  width     = 3000, 
+  height    = 3000, 
+  limitsize = FALSE 
+)
+
+good_copy <- magick::image_read(here::here("week03", "good-copy.png"))
+good_copy <- good_copy %>% magick::image_trim()
+good_copy %>% magick::image_write(here::here("week03", "final.png"))
+```
+
