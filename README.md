@@ -8,3 +8,7 @@ My attempts at the #RecreationThursday
 ## Week 2
 
 ![](week02/final.png)
+
+## Week 3
+
+![](week03/final.png)
