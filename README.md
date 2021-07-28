@@ -17,3 +17,7 @@ Each art piece will be accompanied with alt-text to make this project as accessi
 ## Week 3
 
 ![](week03/final.png)
+
+## Week 4
+
+![](week04/final.png)
