@@ -9,60 +9,215 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 library(tidyverse)
+library(rlang)
 ```
 
+1. We're going to make a kite-like shape, by protruding off the hypotenuse of a right angle triangle. Then plot the eyes & tail!
+
+2. We rotate everything randomly, to breathe more life in. I did this with matrix multiplication. To make this rotating work with all the shapes (polygon, eyes, tail), I wrote some helper functions
+
+- `get_mids()` 
+- `get_original_location()` 
+- `get_centroid_mat()` 
+- `rotate_mat()`
+
+This page summarizes what I'm doing: https://math.stackexchange.com/questions/1917449/rotate-polygon-around-center-and-get-the-coordinates/1917485
+
 ```{r}
-# We're going to start at the corner that has the 90 degrees
-gimmie_shape <- function(start_x, start_y, square_len, 
-                         hyp_prop = runif(n = 1, min = 0, max = 1), 
-                         prot_amt = square_len * 0.25) {
+draw_stingrays <- function(start_x, 
+                           start_y, 
+                           square_len = 0.7, 
+                           hyp_prop   = 0.5,
+                           prot_amt   = 0.3,
+                           rotate_angle) {
   
-  # Picking a point on the hypotenuse
-  mid_x <- (1-hyp_prop) * (start_x)            + hyp_prop * (start_x+square_len)
-  mid_y <- (1-hyp_prop) * (start_y+square_len) + hyp_prop * (start_y)
+  # Linear interpolation between two points (hypotenuse) ------------------------------------------------------
   
-  # Picking a degree to protrude out
-  right_angle <- atan2(start_y - start_y+square_len, start_x+square_len - start_x)
-  angle_offset <- -0.384 #runif(n = 1, min = -0.5, max = 0.5) # The offset should be set up so that
-  angle <- right_angle + angle_offset*pi                      # the closer hyp_prop is to either ends,
-                                                              # it should steer away the angle from
-  mid_x_mod <- mid_x + cos(angle)*prot_amt                    # each direction
-  mid_y_mod <- mid_y + sin(angle)*prot_amt
-                                                              # In the same vein, I should make prot_amt
-  tibble(                                                     # to be not so much towards each vertexes
-    x = c(start_x, start_x, mid_x_mod, start_x + square_len),
-    y = c(start_y, start_y + square_len, mid_y_mod, start_y),
-    group = paste0("start_x->", start_x, "start_y->", start_y, "hyp_prop->", hyp_prop, "prot_amt->", prot_amt),
-    clr = sample(letters[1:4], size = 1),
-    hyp_prop = hyp_prop,
-    angle_offset = angle_offset
+  right_angle <- atan2(start_y - start_y+square_len, start_x+square_len - start_x) # Just need to use this again lol
+  
+  get_mids <- function(hyp, square_len_offset) {
+    mid_x <- (1-hyp) * (start_x)            + hyp * (start_x+square_len)
+    mid_y <- (1-hyp) * (start_y+square_len) + hyp * (start_y)
+    
+    mid_x_mod <- mid_x + cos(right_angle)*prot_amt*square_len*square_len_offset           
+    mid_y_mod <- mid_y + sin(right_angle)*prot_amt*square_len*square_len_offset
+    
+    list(
+      "x" = mid_x_mod,
+      "y" = mid_y_mod
+    )
+  }
+  
+  
+  
+  
+  
+  # vertices matrix that represents the coords of the original shapes ----------------------------------------
+  
+  get_original_location <- function(n, ...) {
+    dots <- enquos(...)
+    my_data <- map_dbl(dots, eval_tidy) # I just presented this chapter!
+    
+    matrix(data = my_data, nrow = 2, ncol = n, byrow = TRUE)
+  }
+  
+  
+  
+  
+  
+  # Centroid of the shapes, to rotate around ----------------------------------------------------------------
+  
+  get_centroid_mat <- function(mat) {
+    my_mat <- matrix(data = c(mean(mat[1, ]), 
+                              mean(mat[2, ])),
+                     nrow = 2,
+                     ncol = 1)
+    
+    matrix(data = my_mat, nrow = 2, ncol = ncol(mat))
+  }
+  
+  
+  
+  
+  
+  # rotate the original shape around the centroid by a given angle -----------------------------------------
+  
+  rotate_mat <- function(orig, centroid) {
+    rotations <- matrix(data = c(cos(rotate_angle*pi), -sin(rotate_angle*pi), 
+                                 sin(rotate_angle*pi),  cos(rotate_angle*pi)),
+                        nrow = 2,
+                        ncol = 2,
+                        byrow = TRUE)
+    
+    mult_results <- rotations %*% (orig - centroid) + centroid
+    
+    mult_results <- mult_results %>% 
+      t() %>% 
+      as_tibble()
+    
+    names(mult_results) <- c("x", "y")
+    
+    mult_results %>% 
+      mutate(
+        group = paste0("start_x->", start_x, "start_y->", start_y, "hyp_prop->", hyp_prop, "prot_amt->", prot_amt),
+        clr = sample(letters[1:4], size = 1)
+      )
+  }
+  
+  
+  
+  
+  
+  # This is the body of a stingray! ------------------------------------------------------------------------
+  
+  mids_poly <- get_mids(hyp_prop, 1)   
+  
+  x1 <- start_x                   # Starting vertices (start from the right angle vertex, and go clockwise) 
+  x2 <- start_x 
+  x3 <- mids_poly[["x"]] 
+  x4 <- start_x + square_len
+  
+  y1 <- start_y 
+  y2 <- start_y + square_len
+  y3 <- mids_poly[["y"]]
+  y4 <- start_y
+  
+  orig_loc_polygons <- get_original_location(n = 4, x1, x2, x3, x4, y1, y2, y3, y4)
+  centroid_polygons <- get_centroid_mat(mat = orig_loc_polygons)
+  res_polygons <- rotate_mat(orig = orig_loc_polygons, centroid = centroid_polygons)
+  
+  
+  
+  
+  
+  # These are the eyes of a stingray! ----------------------------------------------------------------------
+  
+  eye_locs <- list(hyp_prop - 0.1, hyp_prop + 0.1)
+  
+  eyes <- eye_locs %>%
+    map(get_mids, square_len_offset = 0.4)
+  
+  orig_loc_eyes <- get_original_location(n = 2, 
+                                         transpose(eyes)$x[[1]], transpose(eyes)$x[[2]], 
+                                         transpose(eyes)$y[[1]], transpose(eyes)$y[[2]])
+  centroid_eyes <- centroid_polygons[, 1:2] # using the polygon's center to rotate
+  res_eyes <- rotate_mat(orig = orig_loc_eyes, centroid = centroid_eyes)
+  
+  
+  
+  
+  
+  # This is the smile of a stingray! ----------------------------------------------------------------------
+  
+  smile_n <- 100
+  
+  smile_loc <- tibble(
+    id = 1:smile_n,
+    angle  = (id/smile_n * pi) + right_angle * 3,
+    x = (cos(angle) * 0.1 + centroid_polygons[1, 1]),
+    y = (sin(angle) * 0.1 + centroid_polygons[2, 1])
+  ) 
+  
+  orig_smile_loc <- matrix(c(smile_loc$x, smile_loc$y), nrow = 2, ncol = nrow(smile_loc), byrow = TRUE)
+  centroid_smile <- matrix(data = centroid_polygons[, 1], nrow = 2, ncol = ncol(orig_smile_loc)) # using the polygon's center to rotate
+  res_smile <- rotate_mat(orig = orig_smile_loc, centroid = centroid_smile)
+  
+  
+  
+  
+  
+  # Final output! -----------------------------------------------------------------------------------------
+  list(
+    "polys" = res_polygons,
+    "eyes" = res_eyes,
+    "smile" = res_smile
   )
 }
 
 my_clrs <-c("#FFAE00", "#008E9E", "#004E9D", "#F28973")
 
-my_df <- crossing(
-  start_x = 1,
-  start_y = 1,
-  square_len = 0.8
-) %>% 
-  # mutate(hyp_prop = 0.5) %>% 
-  pmap_dfr(gimmie_shape) 
-
-my_df %>% 
-  ggplot(aes(x, y, group = group, fill = clr)) +
-  geom_polygon() +
-  coord_equal() +
-  scale_fill_manual(values = my_clrs) +
-  theme(legend.position = "none")
+helper_func <- function(num_xy) {
+  
+  poplygon_parameters <- crossing(
+    start_x = 1:num_xy,
+    start_y = 1:num_xy
+  ) %>% 
+  mutate(rotate_angle = runif(n = nrow(.), min = -1, max = 1))
+  
+  poplygon_parameters %>% 
+    pmap(draw_stingrays)
+}
 ```
 
 ```{r}
-gimmie_shape(start_x = 1, start_y = 1, square_len = 0.8, hyp_prop = 0.917) %>% 
-  ggplot(aes(x, y, group = group, fill = clr)) + 
-  geom_polygon() +
-  geom_point() +
+res_df1 <- helper_func(num_xy = 5)
+polygons <- res_df1 %>% map_dfr("polys")
+eyes <- res_df1 %>% map_dfr("eyes")
+smile <- res_df1 %>% map_dfr("smile")
+
+g <- ggplot() +
+  geom_polygon(data = polygons, aes(x, y, group = group, fill = clr)) +
+  geom_point(data = eyes, aes(x, y), size = 4) +
+  geom_point(data = smile, aes(x, y)) +
   coord_equal() +
-  theme(legend.position = "none")
+  scale_fill_manual(values = my_clrs) +
+  theme_void() +
+  theme(
+    legend.position = "none",
+    plot.background = element_rect(fill = "#909586", color = "#909586")
+  )
+
+g
+
+ggsave(
+  here::here("week04", "good-copy.png"),
+  plot      = g,
+  device    = ragg::agg_png,
+  res       = 300,
+  units     = "in", 
+  width     = 3000, 
+  height    = 3000, 
+  limitsize = FALSE 
+)
 ```
 
