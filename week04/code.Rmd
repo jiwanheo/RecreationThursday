@@ -12,7 +12,7 @@ library(tidyverse)
 library(rlang)
 ```
 
-1. We're going to make a kite-like shape, by protruding off the hypotenuse of a right angle triangle. Then plot the eyes & tail!
+1. We're going to make a kite-like shape, by protruding off the hypotenuse of a right angle triangle. Then plot the eyes
 
 2. We rotate everything randomly, to breathe more life in. I did this with matrix multiplication. To make this rotating work with all the shapes (polygon, eyes, tail), I wrote some helper functions
 
