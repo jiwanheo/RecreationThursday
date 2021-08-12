@@ -1,0 +1,232 @@
+---
+title: "#RecreationThursday Week04"
+author: "Jiwan Heo"
+output: html_document
+---
+
+Challenge:
+
+- You can draw squares in 4 directions, each iteration changes the size of the square.
+- Each direction has a "wall", formed by squares lining up.
+- Respect this wall until there's a direction change.
+
+Solution:
+
+- Because of the shared wall, there's a point that is shared by a previous square and the next. 
+- Determine which vertex that is, to the new square (eg. going down, the bot_l corner of a square is also the top_l corner of the next square)
+- Fit a new length, to make a new square (which I'm contemplaiting whether or not to randomize)
+
+```{r}
+library(tidyverse)
+library(rlang)
+```
+
+```{r}
+# This helper function creates a 1x8 tibble that holds x/y coords of a square
+# Note the explicit 8 x/y position names, vs 4 generic values being fed. This comes in clutch for reusability
+quick_square <- function(smaller_x, bigger_x, smaller_y, bigger_y) {
+  tibble(
+    x_bot_l = smaller_x,     
+    x_top_l = smaller_x, 
+    x_top_r = bigger_x,
+    x_bot_r = bigger_x,
+    
+    y_bot_l = smaller_y,
+    y_top_l = bigger_y,
+    y_top_r = bigger_y,
+    y_bot_r = smaller_y
+  )
+}
+
+# This function starts from an initial square of length 1, and takes in the instruction_df arg,
+# which has the directions to grow the squares out to.
+draw_squares <- function(init_x, init_y, instruction_df) {
+  
+  # A list that holds all squares separately, initialized with a square of length 1
+  
+  init_square <- quick_square(init_x, init_x+1, init_y, init_y+1)
+  squares_container <- vector("list", length = nrow(instruction_df)+1)
+  squares_container[[1]] <- init_square
+  
+  # Square generation
+  
+  ## From instruction_df, get the direction that we're drawing the next square to.  
+  ## The direction tells us which corner of the current square is shared with the next square.
+  ## From that corner, calculate the new length of the square.
+  ## Carefully add/subtract the length from current x/y coords, to identify the second vertex of the new square, which is all you need to draw the rest.
+  
+  for (i in 1:nrow(instruction_df)) {
+    next_d <- instruction_df[[i, "direction"]]
+    
+    vertex_to_pass_on <- case_when(
+      next_d == "down"  ~ paste0(c("x_", "y_"), "bot_l"), # which touches top_l of the next square 
+      next_d == "left"  ~ paste0(c("x_", "y_"), "top_l"), # which touches top_r of the next square
+      next_d == "up"    ~ paste0(c("x_", "y_"), "top_r"), # which touches bot_r of the next square
+      next_d == "right" ~ paste0(c("x_", "y_"), "bot_r")  # which touches bot_l of the next square
+    )
+    
+    vtx_pass_x <- squares_container[[i]][[vertex_to_pass_on[[1]]]] # These points are 2 out of 4 quick_square() arguments of the next square
+    vtx_pass_y <- squares_container[[i]][[vertex_to_pass_on[[2]]]]
+    
+    # These are the points that make up an edge of the current square, with one end being vtx_pass_x/y. 
+    # The difference between the two (both x/y), is the length of current square
+    opposite_vertex <- case_when( 
+      next_d == "down"  ~ c("x_top_r", "y_top_l"),
+      next_d == "left"  ~ c("x_top_r", "y_bot_l"), 
+      next_d == "up"    ~ c("x_bot_l", "y_bot_r"), 
+      next_d == "right" ~ c("x_bot_l", "y_top_r")  
+    )
+    
+    vtx_opp_x <- squares_container[[i]][[opposite_vertex[[1]]]]
+    vtx_opp_y <- squares_container[[i]][[opposite_vertex[[2]]]]
+    
+    # Which we multiply by certain amount, to change the length of the new square.
+    multiplier <- instruction_df[[i, "multiplier"]]
+    new_x_len <- (vtx_opp_x - vtx_pass_x) * multiplier 
+    new_y_len <- (vtx_opp_y - vtx_pass_y) * multiplier
+    
+    # The next helper function, and the if/else that calls the function, work together, in order to...
+    # correctly identify the last 2 out of 4 quick_square() arguments of the next square, and pass them in a correct order.
+    
+    backtrack_new_square <- function(x_operator, y_operator, vertex_order) { 
+      backtrack_x <- x_operator(vtx_pass_x, new_x_len) # The arguments let me re-use this functions for all 4 directions. 
+      backtrack_y <- y_operator(vtx_pass_y, new_y_len)
+      
+      quick_square(                               # `vertex_order` arg explicitly specifies the order of the 
+        smaller_x = eval(sym(vertex_order[[1]])), # 4 sets of x/y coordinates that make up a square, depending on direction
+        bigger_x  = eval(sym(vertex_order[[2]])),
+        smaller_y = eval(sym(vertex_order[[3]])),
+        bigger_y  = eval(sym(vertex_order[[4]]))
+      )
+    }
+    
+    # This is just 4 different ways to call the backtrack_new_square() to make a square.
+    square_this_round <- if(next_d == "down") {
+      backtrack_new_square( # For example, if we're drawing downwards, 
+        x_operator = `+`, # the new x value that we need for the new square is vtx_pass_x - new_x_len. (on top of vtx_pass_x, which we already know)
+        y_operator = `-`, # same logic with y, 
+        vertex_order = c("vtx_pass_x", "backtrack_x", "backtrack_y", "vtx_pass_y") # The new x we created, is a bigger_x to the quick_square function, 
+      )                                                                            # because its length was extended to the right.
+    } else if (next_d == "left") {                                                   # However, the y we created, is a smaller_y, because we extended downward.
+      backtrack_new_square(
+        x_operator = `-`,
+        y_operator = `+`,
+        vertex_order = c("backtrack_x", "vtx_pass_x", "backtrack_y", "vtx_pass_y")
+      )
+    } else if (next_d == "up") {
+      backtrack_new_square(
+        x_operator = `+`,
+        y_operator = `-`,
+        vertex_order = c("backtrack_x", "vtx_pass_x", "vtx_pass_y", "backtrack_y")
+      )
+    } else if (next_d == "right") {
+      backtrack_new_square(
+        x_operator = `-`,
+        y_operator = `+`,
+        vertex_order = c("vtx_pass_x", "backtrack_x", "vtx_pass_y", "backtrack_y")
+      )  
+    }
+    
+    squares_container[[i+1]] <- square_this_round
+    
+  }
+  
+  squares_container
+  
+}
+```
+
+# Let's have some fun! 
+
+Below, we create an instruction df, and feed it to draw_squares() function. 
+A little more processing, then plot.
+
+```{r}
+# Since we can kinda paint with the square tool, we can manually tell the paint where to go
+
+submission_inst <- tibble(
+  direction = c(
+    rep("down", 5),
+    rep("left", 5),
+    rep("up", 3),
+    rep("right", 2),
+    "down",
+    "left",
+    "down"  ,
+    rep("right", 8), rep("right", 3)
+  )
+) %>% 
+  mutate(
+    multiplier = c(
+      seq(1.5, 1.2, length.out = 5),
+      seq(1.1, 1.1, length.out = 5),
+      seq(1.1, 1.05, length.out = 3),
+      seq(1.1, 1.6, length.out = 2),
+      0.825,
+      0.755,
+      0.67, 
+      0.515, seq(0.8, 0.5, length.out = 7), 3, 2, 3.7
+    )
+  )
+
+inside_out_inst <- tibble( # This one's a little uglier, but oh well
+  direction = c(rep("down", 5), 
+                rep("right", 10),
+                rep("up", 10),
+                rep("left", 2),
+                rep("down", 1)
+  )
+) %>% 
+  mutate(
+    multiplier = c(seq(1, 2, length.out = 4), 1.3, 
+                   seq(0.9, 0.8, length.out = 5), seq(1.2, 1.5, length.out = 4), 0.5,
+                   seq(0.6, 0.5, length.out = 3), seq(1, 2.3, length.out = 5), 1.5, 1.2,
+                   1.2, 1.565,
+                   0.227
+    )
+  )
+
+draw_helper <- function(instruction) { # Just takes the draw_squares() results, and puts into a ggplot
+  coords <- draw_squares(0, -1, instruction)
+  
+  coords_proc <- coords %>% 
+    map_dfr(~.x) %>% 
+    mutate(id = as.character(row_number())) %>% 
+    pivot_longer(-id) %>% 
+    mutate(name1 = str_extract(name, "^.")) %>% 
+    mutate(name2 = str_remove(name, "^..")) %>% 
+    pivot_wider(id_cols = id, names_from = name1, values_from = value, values_fn = list) %>% 
+    unnest(c(x, y))
+  
+  res <- coords_proc %>% 
+    ggplot(aes(x, y, group = id)) +
+    geom_polygon(fill = NA, color = "#000000", size = 3) +
+    coord_equal() +
+    theme_void() +
+    theme(
+      plot.background = element_rect(fill = "#e5e5e3", color = "#e5e5e3"),
+      
+      plot.margin = unit(c(2,2,2,2), "cm")
+    )
+  
+  res
+}
+
+# inside_out <- draw_helper(inside_out_inst)
+submission <- draw_helper(submission_inst)
+submission
+# ggsave(
+#   here::here("week05", "final.png"),
+#   plot      = submission,
+#   device    = ragg::agg_png,
+#   res       = 300,
+#   units     = "in",
+#   width     = 3000,
+#   height    = 3000,
+#   limitsize = FALSE
+# )
+
+# pre_res <- magick::image_read(here::here("week05", "final.png"))
+# pre_res %>% magick::image_trim() %>% magick::image_write(here::here("week05", "final.png"))
+
+```
