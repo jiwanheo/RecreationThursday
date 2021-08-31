@@ -1,0 +1,81 @@
+---
+title: "Week 6 #RecreationThursday"
+author: "Jiwan Heo"
+output: html_document
+---
+
+I wanna do the recreation, but instead, we're going to do the colour generation from a distribution, so it's not perfect.
+
+```{r}
+library(tidyverse)
+library(rlang)
+```
+
+```{r}
+make_canvas <- function(n_row) {
+  grid1 <- crossing(x0 = 1:n_row, y0 = 1:n_row)
+  grid2 <- crossing(x0 = 1.5:(n_row-0.5), y0 = 1.5:(n_row-0.5))
+  
+  bind_rows(grid1, grid2) %>% 
+    arrange(x0, y0)
+}
+
+my_canvas <- make_canvas(20) %>% 
+  mutate(
+    # a = seq(0.25, 0.5, length.out = nrow(.)), 
+    a = 0.25,
+    b = 0.25, 
+    angle = 0
+  ) 
+```
+
+```{r}
+# Take an expression as input (drawing function)
+# Going column by column, calculate the result of the expression for every x0
+# Pick the closets y0 on the canvas, that's closest to the result of the expression
+# For the rest of the points (vertical line), calculate the distance to the picked point. 
+draw_func <- function(canvas, expr) {
+  expr <- enquo(expr)
+  eval_res <- eval_tidy(expr, canvas)
+  canvas_nrow <- canvas %>% filter(x0 == 1) %>% nrow() # To scale the distance
+  
+  distance_calculated <- canvas %>% 
+    mutate(answer = eval_res) %>% 
+    mutate(diff = abs(answer - y0)) %>% 
+    group_by(x0) %>% 
+    mutate(closest = diff == min(diff)) %>% 
+    mutate(dist = map_dbl(row_number(), ~ abs(.x - min(which(closest == TRUE))))) %>% 
+    ungroup() 
+  
+  distance_scaled <- distance_calculated %>%  
+    mutate(dist = dist / canvas_nrow) %>% 
+    mutate(clr  = hsv(h = 0, s = 0, v = dist)) %>% 
+    select(-c(answer, diff))
+}
+
+my_func <- expr(20 / x0) 
+my_drawn_canvas <- draw_func(canvas = my_canvas, expr = !!my_func)
+
+my_clrs <- my_drawn_canvas %>% distinct(clr) %>% as_vector()
+my_clrs <- my_clrs %>% set_names(nm = my_clrs)
+```
+
+```{r}
+my_drawn_canvas %>% 
+  ggplot() +
+  ggforce::geom_ellipse(aes(x0 = x0, 
+                            y0 = y0, 
+                            a = a, 
+                            b = b, 
+                            angle = angle, 
+                            fill = clr), 
+                        color = NA) +
+  coord_equal() +
+  theme_void() +
+  theme(
+    legend.position = "none"
+  ) + 
+  scale_fill_manual(values = my_clrs)
+  # NULL
+
+```
