@@ -4,14 +4,11 @@ author: "Jiwan Heo"
 output: html_document
 ---
 
-I wanna do the recreation, but instead, we're going to do the colour generation from a distribution, so it's not perfect.
-
-```{r}
+```{r initial_canvas}
 library(tidyverse)
 library(rlang)
-```
 
-```{r}
+# Criss-cross grid
 make_canvas <- function(n_row) {
   grid1 <- crossing(x0 = 1:n_row, y0 = 1:n_row)
   grid2 <- crossing(x0 = 1.5:(n_row-0.5), y0 = 1.5:(n_row-0.5))
@@ -22,14 +19,13 @@ make_canvas <- function(n_row) {
 
 my_canvas <- make_canvas(20) %>% 
   mutate(
-    # a = seq(0.25, 0.5, length.out = nrow(.)), 
     a = 0.25,
     b = 0.25, 
     angle = 0
   ) 
 ```
 
-```{r}
+```{r plot_function_to_canvas}
 # Take an expression as input (drawing function)
 # Going column by column, calculate the result of the expression for every x0
 # Pick the closets y0 on the canvas, that's closest to the result of the expression
@@ -50,17 +46,24 @@ draw_func <- function(canvas, expr) {
   distance_scaled <- distance_calculated %>%  
     mutate(dist = dist / canvas_nrow) %>% 
     mutate(clr  = hsv(h = 0, s = 0, v = dist)) %>% 
+    mutate(a = a - a*dist) %>% # Height/width scaled by dist
     select(-c(answer, diff))
 }
+```
 
-my_func <- expr(20 / x0) 
+```{r setup_for_ggplot}
+# Couple different functions to plot
+my_func <- expr(sin(x0) * 10 + 10)
+my_func <- expr(x0)
+my_func <- expr(sin(x0 / 20 * pi) * 20)
+
 my_drawn_canvas <- draw_func(canvas = my_canvas, expr = !!my_func)
 
 my_clrs <- my_drawn_canvas %>% distinct(clr) %>% as_vector()
 my_clrs <- my_clrs %>% set_names(nm = my_clrs)
 ```
 
-```{r}
+```{r lets_plot}
 my_drawn_canvas %>% 
   ggplot() +
   ggforce::geom_ellipse(aes(x0 = x0, 
@@ -76,6 +79,4 @@ my_drawn_canvas %>%
     legend.position = "none"
   ) + 
   scale_fill_manual(values = my_clrs)
-  # NULL
-
 ```
