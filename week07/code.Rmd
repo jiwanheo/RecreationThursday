@@ -6,11 +6,17 @@ output: html_document
 Flow field is defined as a grid, with **dimension**: num_cols x num_rows, with each item containing an angle.
 This grid is **sized up**, and a canvas (bigger in size) is created
 
+Let's do some collision checks 
+- lines: kinda hard
+- shape: let's try circle, and stop line when collide.
+
+
 I like seed 57, 66, 76 vs something like 17
 
-```{r}
+```{r generate_flow_field}
 library(tidyverse)
 library(ambient)
+library(ggforce)
 
 generate_flow_field <- function(ff_size = 1000, 
                                 resolution_factor = 0.025,
@@ -60,7 +66,7 @@ generate_flow_field <- function(ff_size = 1000,
 }
 ```
 
-```{r}
+```{r draw_curve}
 draw_curve <- function(start_x, 
                        start_y, 
                        row_num, 
@@ -69,19 +75,34 @@ draw_curve <- function(start_x,
                        left_x     = 1 * resolution, # actual grid bottom-left coords
                        bot_y      = 1 * resolution,
                        num_steps,   # This controls how smooth/curvy the line is
-                       step_length) # This controls how far the line should go each step
+                       step_length, # This controls how far the line should go each step
+                       circles, # circles here, are still in list form
+                       p)  # p can go, as soon as I figure out circle detection
 { 
   
-  x_dim_range <- 1:ncol(flow_field) # get the grid dimension to lookup the angles. 
-  y_dim_range <- 1:nrow(flow_field)
   
-  # Record x/y movements in the flow field. (Initialize with the starting points)
+  # Collision check #1
+  # Initial check to see if the starting points are in the circles to begin with.
+  # If so, stop line generating process, and return NULL
+  for (circle in circles){
+    point_to_circle_center_distance <- sqrt( (start_x - circle$x0)^2 + (start_y - circle$y0)^2 )
+    
+    if(point_to_circle_center_distance <= circle$radius) {
+      return(NULL)
+    }
+  }
+  
+  # If not, initialize the curve with the starting points, and keep generating
   x_container <- vector("numeric", num_steps + 1)
   y_container <- vector("numeric", num_steps + 1)
   
   x_container[1] <- start_x
   y_container[1] <- start_y
   
+  
+  # get the grid dimension to lookup the closest angles, from anywhere on the plot.
+  x_dim_range <- 1:ncol(flow_field) 
+  y_dim_range <- 1:nrow(flow_field)
   
   # With the rest of num_steps, move through the flow field, with the closest angle we can grab.
   for (i in 1:num_steps) {
@@ -107,9 +128,41 @@ draw_curve <- function(start_x,
     start_x <- start_x + x_step
     start_y <- start_y + y_step
     
-    # And record
+    
+    #collision check #2
+    ## compare circle radius to the distance between circle center and the end of the line.
+    ## What if i want to pass in many circles? Do I have to run a check on every circle with every step/line? probs
+    ## need to compare line to circle, for the subsequent points.
+    
+    for (circle in circles){
+      ## Previous point is already outside the circle.
+      
+      ## Check if the current point is in the circle
+      point_to_circle_center_distance <- sqrt( (start_x - circle$x)^2 + (start_y - circle$y)^2 )
+      
+      if(point_to_circle_center_distance <= circle$radius) {
+        return(NULL)
+      }
+      # if not, check to see if the LINE crosses the circle
+      # dot product, apparently
+    }
+    
+    # If no collision, record
     x_container[i+1] <- start_x
     y_container[i+1] <- start_y
+    
+    
+    
+    
+    # these can be safely deleted after collision detection works
+    current_progress <- tibble(
+      x = x_container,
+      y = y_container
+    ) %>% 
+      filter(x_container != 0)
+    p <- p + 
+      geom_point(data = current_progress, aes(x = x, y = y))
+    print(p)
     
   }
   
@@ -117,40 +170,53 @@ draw_curve <- function(start_x,
     x = x_container,
     y = y_container,
     row_num = row_num
-  )
+  ) %>% 
+    mutate(plot_order = row_number())
   
 }
 ```
 
-```{r}
+```{r calculate_flow_fields}
 calculate_flow_fields <- function(n_out = 800,
                                   width = 1000,
                                   num_steps,  
                                   step_length,
                                   ff,
-                                  resolution_factor) 
+                                  resolution_factor,
+                                  circles, # circles is in list form
+                                  p) # p can go
 {
   df <- tibble(
-    start_x = runif(-width*0.1, width*1.1, n = n_out),
-    start_y = runif(-width*0.1, width*1.1, n = n_out)
+    # start_x = runif(-width*0.1, width*1.1, n = n_out),
+    # start_y = runif(-width*0.1, width*1.1, n = n_out)
+    
+    
+    start_x = c(250, 600),
+    start_y = c(500, 1000)
   ) %>%
     mutate(row_num = row_number(),
            resolution = width * resolution_factor,
            num_steps = num_steps,
            step_length = step_length)
   
+  
+  
+  
   df %>% 
     pmap_dfr(draw_curve, 
-             flow_field = ff)
+             flow_field = ff,
+             circle = circles,
+             p = p)
 }
 ```
 
-```{r}
+```{r plotter}
 plotter <- function(background_clr = "#e7e2df",
                     line_clr = "#914062",
                     ff_size,
                     ff_outline, 
-                    ff_res
+                    ff_res,
+                    circles # circles is in plot friendly form
 ) 
 {
   
@@ -166,27 +232,48 @@ plotter <- function(background_clr = "#e7e2df",
   
   ggplot() +
     geom_segment(data = ff_outline,
-                 aes(x = x, 
+                 aes(x = x,
                      y = y,
                      xend = xend,
                      yend = yend),
-                 color = "grey70") +
+                 color = "grey20") +
+    geom_circle(data = circles,
+                aes(x0 = x0,
+                    y0 = y0,
+                    r = radius),
+                fill = "blue",
+                color = "blue") +
     geom_path(data = ff_res,
               aes(x = x,
                   y = y,
                   group = row_num),
-              colour = line_clr) +
+              colour = line_clr,
+              alpha = 1) +
+    geom_point(data = ff_res,
+               aes(x = x,
+                   y = y,
+                   group = row_num,
+                   size = 1/plot_order),
+               show.legend = FALSE,
+               colour = line_clr,
+               alpha = 1) +
+    geom_text(data = ff_res,
+              aes(x = x,
+                  y = y,
+                  label = row_num),
+              size = 10) +
     coord_equal(xlim = c(canvas_left_x, canvas_right_x),
                 ylim = c(canvas_top_y, canvas_bottom_y)) +
     theme_void() +
     theme(
       plot.background = element_rect(fill = background_clr,
                                      color = background_clr)
-    )
+    ) +
+    labs(title = "Big dot is first")
 }
 ```
 
-```{r}
+```{r call_everything}
 call_everything <- function(ff_size,
                             resolution_factor,
                             perlin_scale_factor,
@@ -194,7 +281,9 @@ call_everything <- function(ff_size,
                             perlin_freq,
                             
                             num_steps,
-                            step_length) 
+                            step_length, 
+                            
+                            circles) # circles is in list form
 {
   flow_fields <- generate_flow_field(ff_size = ff_size, 
                                      resolution_factor = resolution_factor,
@@ -202,17 +291,43 @@ call_everything <- function(ff_size,
                                      perlin_seed = perlin_seed,
                                      perlin_freq = perlin_freq)
   
-  my_curves <- calculate_flow_fields(num_steps = num_steps, 
+  plot_friendly_circles <- tibble(
+    x0 = circles %>% map_dbl("x0"),
+    y0 = circles %>% map_dbl("y0"),
+    radius = circles %>% map_dbl("radius")
+  )
+  
+  #This can go after collision 
+  p <-  ggplot() +
+    geom_segment(data = flow_fields[[2]],
+                 aes(x = x,
+                     y = y,
+                     xend = xend,
+                     yend = yend),
+                 color = "grey20") +
+    geom_circle(data = plot_friendly_circles,
+                aes(x0 = x0,
+                    y0 = y0,
+                    r = radius),
+                fill = "blue",
+                color = "blue") +
+    coord_equal()
+  
+  my_curves <- calculate_flow_fields(n_out = 5,
+                                     num_steps = num_steps, 
                                      step_length = step_length,
                                      ff = flow_fields[[1]],
-                                     resolution_factor = resolution_factor)
+                                     resolution_factor = resolution_factor,
+                                     circles = circles,
+                                     p = p)
   
   my_plot <- plotter(ff_size = ff_size,
                      ff_outline = flow_fields[[2]],
-                     ff_res = my_curves)
+                     ff_res = my_curves,
+                     circles = plot_friendly_circles)
   
-  plot_name <- paste("ff_size", ff_size, 
-                     "resolution_factor", round(resolution_factor, digits = 5), 
+  plot_name <- paste("ff_size", ff_size,
+                     "resolution_factor", round(resolution_factor, digits = 5),
                      "perlin_scale_factor", round(perlin_scale_factor, digits = 5),
                      "perlin_seed", perlin_seed,
                      "perlin_freq", perlin_freq,
@@ -220,34 +335,59 @@ call_everything <- function(ff_size,
                      "step_length", round(step_length, digits = 5),
                      ".png")
   
-  list(plot = my_plot, plot_name = plot_name)
+  list(plot = my_plot, plot_name = plot_name, ff_res = my_curves)
 }
+```
 
-nums <- 10
+```{r}
+circles <- list(
+  list(
+    list(radius = 200, x0 = 300, y0 = 500),
+    list(radius = 100, x0 = 900, y0 = 500)
+  ) 
+)
 
-my_plots <- crossing(
+my_plots <- tibble(
   ff_size = 1000,
-  resolution_factor = runif(n = 1, 0.005, 0.05),
-  perlin_scale_factor = runif(n = 1, 0.001, 0.01),
-  perlin_seed = 67,
+  resolution_factor = 0.1,
+  perlin_scale_factor = 0.0001,
+  perlin_seed = 89431,
   perlin_freq = 5,
-  num_steps = runif(n = 1, 500, 1000), 
-  step_length = runif(n = 1, 0.01, 0.03)
+  num_steps = 2,
+  step_length = 10,
+  circles = circles
 ) %>%
   pmap(call_everything)
 
-current_time <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
+print(my_plots[[1]][[1]])
 
-walk(my_plots,
-     ~ggsave(
-       here::here("week07", "progress", current_time, .x$plot_name),
-       plot      = .x$plot,
-       device    = ragg::agg_png,
-       res       = 100,
-       units     = "in",
-       width     = 1000,
-       height    = 1000,
-       limitsize = FALSE
-     ))
+my_plots[[1]][[3]]
+```
+
+```{r}
+# current_time <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
+# 
+# my_plots <- crossing(
+#   ff_size = 1000,
+#   resolution_factor = runif(n = 3, 0.005, 0.05),
+#   perlin_scale_factor = runif(n = 3, 0.001, 0.01),
+#   perlin_seed = sample(1:99999, size = 3),
+#   perlin_freq = 5,
+#   num_steps = c(2:8),
+#   step_length = sample(5:10)
+# ) %>%
+#   pmap(call_everything)
+# 
+# walk(my_plots,
+#      ~ggsave(
+#        here::here("week07", "progress", current_time, .x$plot_name),
+#        plot      = .x$plot,
+#        device    = ragg::agg_png,
+#        res       = 100,
+#        units     = "in",
+#        width     = 1000,
+#        height    = 1000,
+#        limitsize = FALSE
+#      ))
 ```
 
