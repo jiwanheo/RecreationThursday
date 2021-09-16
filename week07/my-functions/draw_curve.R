@@ -51,13 +51,14 @@ draw_curve <- function(start_x,
     # Subsequent curve building steps will be cheecked against the circles
     for (circle in circles){
       line_crosses_circle <- line_to_circle_collision(line_x    = x_container[[i]], 
-                                                      line_y    = x_container[[i]], 
+                                                      line_y    = y_container[[i]], 
                                                       line_xend = next_step$x, 
                                                       line_yend = next_step$y,
                                                       
-                                                      circle_x = circle$x, 
-                                                      circle_y = circle$y, 
-                                                      circle_r = circle$r)
+                                                      circle_x       = circle$x, 
+                                                      circle_y       = circle$y, 
+                                                      circle_r       = circle$r,
+                                                      circle_padding = circle$padding)
       
       if (line_crosses_circle) {
         return(
@@ -65,7 +66,7 @@ draw_curve <- function(start_x,
             x = x_container %>% subset(. != 0), # return the progress right up until collision
             y = y_container %>% subset(. != 0),
             row_num = row_num # curve grouping
-          ) %>% 
+          ) %>%  
             dplyr::mutate(plot_order = dplyr::row_number())
         )
       }
@@ -81,7 +82,7 @@ draw_curve <- function(start_x,
     x = x_container,
     y = y_container,
     row_num = row_num # curve grouping
-  ) %>% 
-    dplyr::mutate(plot_order = dplyr::row_number())
+  ) %>%   
+    dplyr::mutate(plot_order = dplyr::row_number()) 
   
 }

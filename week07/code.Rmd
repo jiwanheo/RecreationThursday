@@ -1,18 +1,10 @@
 ---
-title: "Untitled"
+title: "Week 7 #RecreationThursday"
+author: "Jiwan Heo"
 output: html_document
 ---
 
-Flow field is defined as a grid, with **dimension**: num_cols x num_rows, with each item containing an angle.
-This grid is **sized up**, and a canvas (bigger in size) is created
-
-Let's do some collision checks 
-- lines: kinda hard
-- shape: let's try circle, and stop line when collide.
-  - making some progress here.
-
-
-I like seed 57, 66, 76 vs something like 17
+Flow field with circle-line collision. Scroll down to line 63 for explanation!
 
 ```{r setup}
 # library(tidyverse) # Trying my luck with namespace here!
@@ -20,15 +12,15 @@ I like seed 57, 66, 76 vs something like 17
 # library(ggforce)
 library(magrittr) # oh well
 
-
+source(here::here("week07", "my-functions", "call_everything.R"))
 source(here::here("week07", "my-functions", "generate_flow_field.R"))
+source(here::here("week07", "my-functions", "calculate_flow_fields.R"))
 source(here::here("week07", "my-functions", "draw_curve.R"))
 source(here::here("week07", "my-functions", "step_into_next_curve_segment.R"))
-source(here::here("week07", "my-functions", "calculate_flow_fields.R"))
-source(here::here("week07", "my-functions", "plotter.R"))
-source(here::here("week07", "my-functions", "call_everything.R"))
-source(here::here("week07", "my-functions", "closest_point_on_line.R"))
 source(here::here("week07", "my-functions", "line_to_circle_collision.R"))
+source(here::here("week07", "my-functions", "closest_point_on_line.R"))
+source(here::here("week07", "my-functions", "colour_assign.R"))
+source(here::here("week07", "my-functions", "plotter.R"))
 ```
 
 # Code
@@ -36,54 +28,36 @@ source(here::here("week07", "my-functions", "line_to_circle_collision.R"))
 ```{r}
 circles <- list(
   list(
-    list(x0 = 300, y0 = 500, r = 200),
-    list(x0 = 900, y0 = 500, r = 50)
+    list(x0 = 200, y0 = 800, r = 80, padding = 1),
+    list(x0 = 500, y0 = 500, r = 80, padding = 1),
+    list(x0 = 800, y0 = 200, r = 80, padding = 1)
   ) 
 )
-
-my_plots <- tibble::tibble(
-  flow_field_width = 1000,
-  resolution_factor = 0.05,
-  perlin_scale_factor = 0.0001,
-  perlin_seed = 89431,
-  perlin_freq = 5,
-  n_out = 500,
-  num_steps = 800,
-  step_length = 0.04,
-  circles = circles
-) %>%
-  purrr::pmap(call_everything)
-
-print(my_plots[[1]][[1]])
-
-my_plots[[1]][[3]]
 ```
 
 ```{r}
-# current_time <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
-# 
-# my_plots <- crossing(
-#   ff_size = 1000,
-#   resolution_factor = runif(n = 3, 0.005, 0.05),
-#   perlin_scale_factor = runif(n = 3, 0.001, 0.01),
-#   perlin_seed = sample(1:99999, size = 3),
-#   perlin_freq = 5,
-#   num_steps = c(2:8),
-#   step_length = sample(5:10)
-# ) %>%
-#   pmap(call_everything)
-# 
-# walk(my_plots,
-#      ~ggsave(
-#        here::here("week07", "progress", current_time, .x$plot_name),
-#        plot      = .x$plot,
-#        device    = ragg::agg_png,
-#        res       = 100,
-#        units     = "in",
-#        width     = 1000,
-#        height    = 1000,
-#        limitsize = FALSE
-#      ))
+current_time <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
+
+my_plots <- tibble::tibble(
+  flow_field_width = 1000,
+  resolution_factor = 0.02,
+  perlin_scale_factor = 0.00375,
+  perlin_seed = 52,
+  perlin_freq = 0.01,
+  n_out = 1500,
+  num_steps = 300,
+  step_length = 0.1,
+  circles = circles,
+  background_clr = "#221e1b", #554135  #2b1c12 #251d18
+  clr1 = "#b3142c",
+  clr2 = "#ffffff",
+  max_clr_prob = 0.99999,
+  border_length = 0.1,
+  current_time = current_time,
+  plot_save = TRUE
+) %>%
+  dplyr::mutate(row_num = dplyr::row_number()) %>% 
+  purrr::pmap(call_everything)
 ```
 
 # Workflow
@@ -93,10 +67,21 @@ my_plots[[1]][[3]]
                   perlin_scale_factor,
                   perlin_seed,
                   perlin_freq, 
+                  
                   n_out,
                   num_steps,
                   step_length,       
-                  circles)
+                  circles,
+                  
+                  clr1,
+                  clr2,
+                  max_clr_prob,
+                  
+                  background_clr,
+                  border_length,          
+                  current_time,
+                  plot_save,
+                  row_num)
                 
 is a function that takes in a bunch of parameters and passes them down to subsequent functions to be called. 
 
@@ -173,14 +158,26 @@ is a function that takes in a bunch of parameters and passes them down to subseq
     - Finds the closest point on a line segment, to a given target point.
     - This distance is compared to a circle radius in `line_to_circle_collision`
     - implementation of https://diego.assencio.com/?index=ec3d5dfdfc0b6a0d147a656f0af332bd
+    
+    3. `colour_assign`(flowed_curves,
+                       clr1, 
+                       clr2, 
+                       max_clr_prob)
+    
+    - After the curve has been calculated, sample 2 colours based on mean y position of the curve.
+    - Returns `list(assigned_clrs, palette)`. 
+      - `assigned_clrs` is a tibble, with row_num <-> clr combination, to be joined on `flowed_curves`
+      - `palette` is a named vector to be passed to `plotter()`, to be used in `scale_color_manual()`
                                
-    3. `plotter`(background_clr = "#e7e2df",
-                 line_clr = "#914062",
-                 circle_clr = "#a48370",
+    4. `plotter`(background_clr,
+                 circle_clr,
                  flow_field_width,
+                 border_length,
                  flow_field_outline, 
                  flow_field_curves,
-                 circles)
+                 circles,
+                 row_num,
+                 clr_palette)
         - takes in the flow field, ff'd curves, and the circles, to plot!
         - transforming the `circles` from a list of lists to a tibble, before feeding it in. (Maybe I'll eventually find an efficient way!)
           

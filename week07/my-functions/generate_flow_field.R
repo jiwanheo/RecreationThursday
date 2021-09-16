@@ -30,7 +30,6 @@ generate_flow_field <- function(flow_field_width = 1000,
                           ncol = num_cols,
                           nrow = num_rows)
   
-  
   visualized_flow_field <- tidyr::crossing(
     x = 1:num_cols,
     y = 1:num_rows

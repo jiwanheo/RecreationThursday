@@ -8,7 +8,17 @@ call_everything <- function(flow_field_width,
                             num_steps,
                             step_length, 
                             
-                            circles) # circles is in list form
+                            circles,# circles is in list form
+                            
+                            clr1,
+                            clr2,
+                            max_clr_prob,
+                            
+                            background_clr,
+                            border_length,
+                            current_time,
+                            plot_save,
+                            row_num) 
 {
   flow_field_list <- generate_flow_field(flow_field_width = flow_field_width, 
                                          resolution_factor = resolution_factor,
@@ -24,18 +34,30 @@ call_everything <- function(flow_field_width,
                                          resolution_factor = resolution_factor,
                                          circles = circles)
   
+  flow_curves_clrs <- colour_assign(flowed_curves = flowed_curves, 
+                                    clr1 = clr1, 
+                                    clr2 = clr2, 
+                                    max_clr_prob = max_clr_prob)
+  
+  flowed_curves <- flowed_curves %>% 
+    left_join(flow_curves_clrs$assigned_clrs, by = c("row_num", "plot_order"))
+  
   plot_friendly_circles <- tibble::tibble(
     x0 = circles %>% purrr::map_dbl("x0"),
     y0 = circles %>% purrr::map_dbl("y0"),
     r  = circles %>% purrr::map_dbl("r")
   )
   
-  my_plot <- plotter(flow_field_width = flow_field_width,
+  my_plot <- plotter(background_clr = background_clr,
+                     flow_field_width = flow_field_width,
+                     border_length = border_length,
                      flow_field_outline = flow_field_list[[2]],
                      flow_field_curves = flowed_curves,
-                     circles = plot_friendly_circles)
+                     circles = plot_friendly_circles,
+                     clr_palette = flow_curves_clrs$palette)
   
-  plot_name <- paste("flow_field_width", flow_field_width,
+  plot_name <- paste("n_out" = n_out,
+                     "flow_field_width", flow_field_width,
                      "resolution_factor", round(resolution_factor, digits = 5),
                      "perlin_scale_factor", round(perlin_scale_factor, digits = 5),
                      "perlin_seed", perlin_seed,
@@ -44,5 +66,22 @@ call_everything <- function(flow_field_width,
                      "step_length", round(step_length, digits = 5),
                      ".png")
   
-  list(plot = my_plot, plot_name = plot_name, flowed_curves = flowed_curves)
+  print(my_plot)
+  
+  if(plot_save) {
+    
+    print(paste0("Saving plot #", row_num))
+    
+    ggplot2::ggsave(
+      here::here("week07", "progress", current_time, plot_name),
+      plot      = my_plot,
+      device    = ragg::agg_png,
+      res       = 100,
+      units     = "in",
+      width     = 1000,
+      height    = 1000,
+      limitsize = FALSE
+    )
+  } 
+  
 }
