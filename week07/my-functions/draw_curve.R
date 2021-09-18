@@ -35,7 +35,7 @@ draw_curve <- function(start_x,
   # With the rest of num_steps, move through the flow field, with the closest angle we can grab.
   for (i in 1:num_steps) {
     
-    next_step <- step_into_next_curve_segment( # K trying to functionize this, and didn't work
+    next_step <- step_into_next_curve_segment( 
       start_x     = x_container[i], 
       start_y     = y_container[i],
       left_x      = left_x,

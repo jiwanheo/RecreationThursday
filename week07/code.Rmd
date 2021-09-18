@@ -14,7 +14,7 @@ library(magrittr) # oh well
 
 source(here::here("week07", "my-functions", "call_everything.R"))
 source(here::here("week07", "my-functions", "generate_flow_field.R"))
-source(here::here("week07", "my-functions", "calculate_flow_fields.R"))
+source(here::here("week07", "my-functions", "start_particles.R"))
 source(here::here("week07", "my-functions", "draw_curve.R"))
 source(here::here("week07", "my-functions", "step_into_next_curve_segment.R"))
 source(here::here("week07", "my-functions", "line_to_circle_collision.R"))
@@ -100,15 +100,15 @@ is a function that takes in a bunch of parameters and passes them down to subseq
         - with the 3 perlin parameters, generate perlin noise, and scale them to fit between 0 ~ 2*pi (will use as angles)
         - going to store this as a matrix (`my_flow_field`). We'll use the matrix index to lookup angles.
           - will also save a tidy version (`visualized_flow_field`), compatible with geom_segment 
-        - let's save `list(my_flow_field, visualized_flow_field)`. We'll pass `my_flow_field` into `calculate_flow_fields()`
+        - let's save `list(my_flow_field, visualized_flow_field)`. We'll pass `my_flow_field` into `start_particles()`
       
-    2. `calculate_flow_fields`(n_out = 800,
-                               flow_field_width,
-                               num_steps,  
-                               step_length,
-                               flow_field,
-                               resolution_factor,
-                               circles)
+    2. `start_particles`(n_out = 800,
+                         flow_field_width,
+                         num_steps,  
+                         step_length,
+                         flow_field,
+                         resolution_factor,
+                         circles)
                                
         - define some x/y combinations that represent the starting point of the curves.
         - for each combination (row in a tibble is pmap'd), call `draw_curve`

@@ -26,13 +26,13 @@ call_everything <- function(flow_field_width,
                                          perlin_seed = perlin_seed,
                                          perlin_freq = perlin_freq)
   
-  flowed_curves <- calculate_flow_fields(n_out = n_out,
-                                         flow_field_width = flow_field_width,
-                                         num_steps = num_steps, 
-                                         step_length = step_length,
-                                         flow_field = flow_field_list[[1]],
-                                         resolution_factor = resolution_factor,
-                                         circles = circles)
+  flowed_curves <- start_particles(n_out = n_out,
+                                   flow_field_width = flow_field_width,
+                                   num_steps = num_steps, 
+                                   step_length = step_length,
+                                   flow_field = flow_field_list[[1]],
+                                   resolution_factor = resolution_factor,
+                                   circles = circles)
   
   flow_curves_clrs <- colour_assign(flowed_curves = flowed_curves, 
                                     clr1 = clr1, 

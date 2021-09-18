@@ -1,10 +1,10 @@
-calculate_flow_fields <- function(n_out = 800,
-                                  flow_field_width,
-                                  num_steps,  
-                                  step_length,
-                                  flow_field,
-                                  resolution_factor,
-                                  circles) # circles is in list form
+start_particles <- function(n_out = 800,
+                            flow_field_width,
+                            num_steps,  
+                            step_length,
+                            flow_field,
+                            resolution_factor,
+                            circles) # circles is in list form
 {      
   df <- tibble::tibble(
     start_x = runif(-flow_field_width*0.1, flow_field_width*1.1, n = n_out),
