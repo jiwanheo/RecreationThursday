@@ -40,7 +40,7 @@ call_everything <- function(flow_field_width,
                                     max_clr_prob = max_clr_prob)
   
   flowed_curves <- flowed_curves %>% 
-    left_join(flow_curves_clrs$assigned_clrs, by = c("row_num", "plot_order"))
+    dplyr::left_join(flow_curves_clrs$assigned_clrs, by = c("row_num", "plot_order"))
   
   plot_friendly_circles <- tibble::tibble(
     x0 = circles %>% purrr::map_dbl("x0"),
@@ -56,15 +56,24 @@ call_everything <- function(flow_field_width,
                      circles = plot_friendly_circles,
                      clr_palette = flow_curves_clrs$palette)
   
-  plot_name <- paste("n_out" = n_out,
-                     "flow_field_width", flow_field_width,
-                     "resolution_factor", round(resolution_factor, digits = 5),
-                     "perlin_scale_factor", round(perlin_scale_factor, digits = 5),
-                     "perlin_seed", perlin_seed,
-                     "perlin_freq", perlin_freq,
-                     "num_steps", num_steps,
-                     "step_length", round(step_length, digits = 5),
+  plot_name <- paste(flow_field_width,
+                     round(resolution_factor, digits = 5),
+                     round(perlin_scale_factor, digits = 5),
+                     perlin_seed,
+                     perlin_freq,
+                     
+                     n_out,
+                     num_steps,
+                     round(step_length, digits = 5),
+                     
+                     clr1,
+                     clr2,
+                     round(max_clr_prob, digits = 5),
+                     
+                     background_clr,
+                     border_length,
                      ".png")
+  
   
   print(my_plot)
   

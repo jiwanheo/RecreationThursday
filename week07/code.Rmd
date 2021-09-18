@@ -40,7 +40,7 @@ current_time <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
 
 my_plots <- tibble::tibble(
   flow_field_width = 1000,
-  resolution_factor = 0.02,
+  resolution_factor = 0.2,
   perlin_scale_factor = 0.00375,
   perlin_seed = 52,
   perlin_freq = 0.01,

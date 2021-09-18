@@ -13,7 +13,7 @@ plotter <- function(background_clr,
   canvas_big_coord  <- flow_field_width * (1+border_length)
   
   # border around the drawing
-  my_borders <- tibble(
+  my_borders <- tibble::tibble(
     x = c(canvas_small_coord, canvas_small_coord, canvas_big_coord, canvas_big_coord,
           canvas_small_coord, canvas_small_coord, canvas_big_coord, canvas_big_coord,
           canvas_small_coord, canvas_small_coord, 0, 0,
@@ -58,5 +58,5 @@ plotter <- function(background_clr,
       panel.background = ggplot2::element_rect(fill = background_clr,
                                               color = background_clr)
     ) +
-    scale_color_manual(values = clr_palette)
+    ggplot2::scale_color_manual(values = clr_palette)
 }
