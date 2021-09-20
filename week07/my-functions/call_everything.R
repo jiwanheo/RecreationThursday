@@ -15,6 +15,7 @@ call_everything <- function(flow_field_width,
                             max_clr_prob,
                             
                             background_clr,
+                            circle_clr,
                             border_length,
                             current_time,
                             plot_save,
@@ -49,6 +50,7 @@ call_everything <- function(flow_field_width,
   )
   
   my_plot <- plotter(background_clr = background_clr,
+                     circle_clr = circle_clr,
                      flow_field_width = flow_field_width,
                      border_length = border_length,
                      flow_field_outline = flow_field_list[[2]],

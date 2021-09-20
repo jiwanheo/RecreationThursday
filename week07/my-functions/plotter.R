@@ -1,4 +1,5 @@
 plotter <- function(background_clr,
+                    circle_clr,
                     flow_field_width,
                     border_length, 
                     flow_field_outline, 
@@ -39,8 +40,8 @@ plotter <- function(background_clr,
                          ggplot2::aes(x0 = x0,
                                       y0 = y0,
                                       r = r),
-                         fill = background_clr,
-                         color = background_clr) +
+                         fill = circle_clr,
+                         color = circle_clr) +
     ggplot2::geom_path(data = flow_field_curves,
                        ggplot2::aes(x = x,
                                     y = y,

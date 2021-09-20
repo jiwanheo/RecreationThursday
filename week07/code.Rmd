@@ -49,7 +49,7 @@ my_plots <- tibble::tibble(
   step_length = 0.1,
   circles = circles,
   background_clr = "#221e1b", #554135  #2b1c12 #251d18
-  clr1 = "#b3142c",
+  circle_clr = "#FFE19C",
   clr2 = "#ffffff",
   max_clr_prob = 0.99999,
   border_length = 0.1,
