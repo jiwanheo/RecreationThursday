@@ -68,11 +68,12 @@ call_everything <- function(flow_field_width,
                      num_steps,
                      round(step_length, digits = 5),
                      
+                     background_clr,
+                     circle_clr,
                      clr1,
                      clr2,
-                     round(max_clr_prob, digits = 5),
                      
-                     background_clr,
+                     round(max_clr_prob, digits = 5),
                      border_length,
                      ".png")
   
