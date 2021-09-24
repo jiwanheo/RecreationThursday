@@ -6,6 +6,7 @@ plotter <- function(background_clr,
                     flow_field_curves,
                     circles, # circles is in plot friendly form
                     row_num,
+                    line_alpha,
                     clr_palette) 
 {
   
@@ -47,6 +48,7 @@ plotter <- function(background_clr,
                                     y = y,
                                     group = row_num,
                                     color = clr),
+                       alpha = line_alpha,
                        show.legend = FALSE) +
     ggplot2::geom_polygon(data = my_borders,
                           ggplot2::aes(x = x, y = y, group = group),

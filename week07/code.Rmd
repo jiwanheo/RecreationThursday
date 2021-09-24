@@ -28,9 +28,30 @@ source(here::here("week07", "my-functions", "plotter.R"))
 ```{r}
 circles <- list(
   list(
-    list(x0 = 200, y0 = 800, r = 80, padding = 1),
-    list(x0 = 500, y0 = 500, r = 80, padding = 1),
-    list(x0 = 800, y0 = 200, r = 80, padding = 1)
+    
+    
+    # With the stars, we'll just go from left to right
+    
+    list(x0 = 60, y0 = 550, r = 10, padding = 1.22),
+    list(x0 = 140, y0 = 530, r = 18, padding = 1.22),
+    
+    list(x0 = 80, y0 = 930, r = 50, padding = 1.22), # second biggest star top left
+    
+    list(x0 = 230, y0 = 955, r = 16, padding = 1.22),
+    list(x0 = 244, y0 = 820, r = 29, padding = 1.22),
+    
+    list(x0 = 306, y0 = 670, r = 14, padding = 1.22),
+    
+    list(x0 = 372, y0 = 460, r = 80, padding = 1.22), # biggest star in the middle
+    
+    list(x0 = 380, y0 = 957, r = 21, padding = 1.22),
+    list(x0 = 430, y0 = 935, r = 15, padding = 1.22),
+    
+    list(x0 = 570, y0 = 837, r = 37, padding = 1.22),
+    list(x0 = 636, y0 = 739, r = 24, padding = 1.22),
+    
+    list(x0 = 830, y0 = 830, r = 110, padding = 1.22) # Big Moon
+    
   ) 
 )
 ```
@@ -38,23 +59,26 @@ circles <- list(
 ```{r}
 current_time <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
 
-my_plots <- tibble::tibble(
+my_plots <- tidyr::crossing(
   flow_field_width = 1000,
-  resolution_factor = 0.2,
-  perlin_scale_factor = 0.00375,
-  perlin_seed = 52,
-  perlin_freq = 0.01,
-  n_out = 1500,
-  num_steps = 300,
-  step_length = 0.1,
+  resolution_factor = 0.01,
+  perlin_scale_factor = 1.5,
+  perlin_seed = c(17769, 22607, 32776, 55468, 63985, 79359, 90662),
+  perlin_freq = 0.012,
+  n_out = c(2000),
+  num_steps = 350,
+  step_length = 0.5,
   circles = circles,
-  background_clr = "#221e1b", #554135  #2b1c12 #251d18
-  circle_clr = "#FFE19C",
-  clr2 = "#ffffff",
+  background_clr = "#070637", #554135  #2b1c12 #251d18
+  circle_clr = "#efcf34",
+  clr_method = "segment",
+  clr1 = "#3643AB",
+  clr2 = "#c6dff5",
+  line_alpha = 0.5, 
   max_clr_prob = 0.99999,
   border_length = 0.1,
   current_time = current_time,
-  plot_save = TRUE
+  plot_save = FALSE
 ) %>%
   dplyr::mutate(row_num = dplyr::row_number()) %>% 
   purrr::pmap(call_everything)

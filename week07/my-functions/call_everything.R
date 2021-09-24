@@ -10,12 +10,14 @@ call_everything <- function(flow_field_width,
                             
                             circles,# circles is in list form
                             
+                            clr_method,
                             clr1,
                             clr2,
                             max_clr_prob,
                             
                             background_clr,
                             circle_clr,
+                            line_alpha, 
                             border_length,
                             current_time,
                             plot_save,
@@ -36,6 +38,7 @@ call_everything <- function(flow_field_width,
                                    circles = circles)
   
   flow_curves_clrs <- colour_assign(flowed_curves = flowed_curves, 
+                                    clr_method = clr_method,
                                     clr1 = clr1, 
                                     clr2 = clr2, 
                                     max_clr_prob = max_clr_prob)
@@ -56,6 +59,7 @@ call_everything <- function(flow_field_width,
                      flow_field_outline = flow_field_list[[2]],
                      flow_field_curves = flowed_curves,
                      circles = plot_friendly_circles,
+                     line_alpha = line_alpha,
                      clr_palette = flow_curves_clrs$palette)
   
   plot_name <- paste(flow_field_width,
@@ -70,14 +74,17 @@ call_everything <- function(flow_field_width,
                      
                      background_clr,
                      circle_clr,
+                     clr_method,
                      clr1,
                      clr2,
+                     line_alpha,
                      
                      round(max_clr_prob, digits = 5),
                      border_length,
                      ".png")
   
   
+  print(plot_name)
   print(my_plot)
   
   if(plot_save) {
@@ -88,10 +95,10 @@ call_everything <- function(flow_field_width,
       here::here("week07", "progress", current_time, plot_name),
       plot      = my_plot,
       device    = ragg::agg_png,
-      res       = 100,
+      res       = 300,
       units     = "in",
-      width     = 1000,
-      height    = 1000,
+      width     = 3000,
+      height    = 3000,
       limitsize = FALSE
     )
   } 
