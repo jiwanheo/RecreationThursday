@@ -9,10 +9,13 @@ plotter <- function(background_clr,
                     line_alpha,
                     clr_palette,
                     show_ff,
+                    use_frame = FALSE,
+                    frame_length = NULL,
+                    frame_colour = NULL) 
 {
   
   # Canvas size (bigger than flow field)
-  canvas_small_coord   <- flow_field_width * -border_length
+  canvas_small_coord   <- flow_field_width * -border_length #Need to define better
   canvas_big_coord  <- flow_field_width * (1+border_length)
   
   # border around the drawing
@@ -30,6 +33,35 @@ plotter <- function(background_clr,
               rep("left", 4),
               rep("right", 4))
   )
+  
+  if(use_frame) {
+    frame_small_coord <- canvas_small_coord - flow_field_width*frame_length
+    frame_big_coord <- canvas_big_coord + flow_field_width*frame_length
+    
+    my_frame <- tibble::tibble(
+      x = c(frame_small_coord, frame_small_coord, frame_big_coord, frame_big_coord,
+            frame_small_coord, frame_small_coord, frame_big_coord, frame_big_coord,
+            frame_small_coord, frame_small_coord, canvas_small_coord, canvas_small_coord,
+            canvas_big_coord, canvas_big_coord, frame_big_coord, frame_big_coord),
+      y = c(frame_small_coord, canvas_small_coord, canvas_small_coord, frame_small_coord,
+            canvas_big_coord, frame_big_coord, frame_big_coord, canvas_big_coord,
+            frame_small_coord, frame_big_coord, frame_big_coord, frame_small_coord,
+            frame_small_coord, frame_big_coord, frame_big_coord, frame_small_coord),
+      group = c(rep("bot", 4),
+                rep("top", 4),
+                rep("left", 4),
+                rep("right", 4))
+    )
+    
+    frame <- ggplot2::geom_polygon(data = my_frame,
+                          ggplot2::aes(x = x, y = y, group = group),
+                          fill = frame_colour)
+    
+    output_range <- c(frame_small_coord, frame_big_coord)
+  } else{
+    frame <- NULL
+    output_range <- c(canvas_small_coord, canvas_big_coord)
+  }
   
   ff_helper <- if (show_ff) { ggplot2::geom_segment(data = flow_field_outline,
                                                  ggplot2::aes(x = x,
@@ -56,13 +88,15 @@ plotter <- function(background_clr,
     ggplot2::geom_polygon(data = my_borders,
                           ggplot2::aes(x = x, y = y, group = group),
                           fill = background_clr) +
-    ggplot2::coord_equal(xlim = c(canvas_small_coord, canvas_big_coord),
-                         ylim = c(canvas_small_coord, canvas_big_coord),
-                         expand = FALSE) +
+    frame +
+    ggplot2::coord_equal(
+      xlim = output_range,
+      ylim = output_range,
+      expand = FALSE) +
     ggplot2::theme_void() +
     ggplot2::theme(
       panel.background = ggplot2::element_rect(fill = background_clr,
-                                              color = background_clr)
+                                               color = background_clr)
     ) +
     ggplot2::scale_color_manual(values = clr_palette)
 }

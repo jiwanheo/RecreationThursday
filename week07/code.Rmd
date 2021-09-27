@@ -29,7 +29,6 @@ source(here::here("week07", "my-functions", "plotter.R"))
 circles <- list(
   list(
     
-    
     # With the stars, we'll just go from left to right
     
     list(x0 = 60, y0 = 550, r = 10, padding = 1.22),
@@ -63,24 +62,28 @@ my_plots <- tidyr::crossing(
   flow_field_width = 1000,
   resolution_factor = 0.01,
   perlin_scale_factor = 1.5,
-  perlin_seed = c(17769, 22607, 32776, 55468, 63985, 79359, 90662),
-  perlin_freq = 0.012,
-  n_out = c(2000),
+  perlin_seed = 63985,
+  perlin_freq = 0.012, 
+  n_out = 2000,
   num_steps = 350,
   step_length = 0.5,
   circles = circles,
   collision_check = TRUE,
   retain_first = FALSE,
+  background_clr = "#070637",#ffe5b8 #3d1b0f #391d13
   circle_clr = "#efcf34",
   clr_method = "segment",
-  clr1 = "#3643AB",
-  clr2 = "#c6dff5",
+  clr1 = "#3643AB", #fb7209
+  clr2 = "#c6dff5", #c11a0b 
   line_alpha = 0.5, 
   max_clr_prob = 0.99999,
-  border_length = 0.1,
+  border_length = 0.025,
   current_time = current_time,
-  plot_save = FALSE
+  plot_save = FALSE,
   show_ff = FALSE,
+  use_frame = TRUE,
+  frame_length = 0.1,
+  frame_colour = "#000000"
 ) %>%
   dplyr::mutate(row_num = dplyr::row_number()) %>% 
   purrr::pmap(call_everything)
