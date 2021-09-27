@@ -22,6 +22,10 @@ generate_flow_field <- function(flow_field_width = 1000,
   min_per <- min(long_grid_ff$angle)
   max_per <- max(long_grid_ff$angle)
   
+  if(min_per == 0 & max_per == 0) {
+    stop("Flow field not generated!")
+  }
+  
   # normalize angles to be between 0 & 2pi
   long_grid_ff <- long_grid_ff %>% 
     dplyr::mutate(angle = (angle-min_per) / (max_per-min_per) *  (2*pi-0) + 0)

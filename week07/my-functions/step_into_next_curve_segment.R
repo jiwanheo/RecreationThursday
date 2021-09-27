@@ -6,7 +6,9 @@ step_into_next_curve_segment <- function(start_x,
                                          x_dim_range,
                                          y_dim_range,
                                          flow_field,
-                                         step_length) 
+                                         step_length,
+                                         what_to_return = "xy_coords",
+                                         first_angle = NULL) 
 {
   # Get the current x/y position (in relation to grid size)
   x_offset <- start_x - left_x
@@ -21,7 +23,7 @@ step_into_next_curve_segment <- function(start_x,
   closest_y_index <- which(abs(y_dim_range - curr_y_index) == min(abs(y_dim_range - curr_y_index)))
   
   # Grab that angle
-  closest_angle <- flow_field[[closest_y_index, closest_x_index]]
+  closest_angle <- if(!is.null(first_angle)){first_angle} else {flow_field[[closest_y_index, closest_x_index]]}
   
   # Extend the current line into that angle (scale it up again)
   x_step  <- step_length * cos(closest_angle) * resolution
@@ -29,6 +31,8 @@ step_into_next_curve_segment <- function(start_x,
   res_x <- start_x + x_step
   res_y <- start_y + y_step
   
-  list(x = res_x, y = res_y)
   
+  if(what_to_return == "angle") {return(closest_angle)}
+  
+  return(list(x = res_x, y = res_y))
 }

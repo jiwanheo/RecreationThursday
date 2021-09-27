@@ -69,7 +69,8 @@ my_plots <- tidyr::crossing(
   num_steps = 350,
   step_length = 0.5,
   circles = circles,
-  background_clr = "#070637", #554135  #2b1c12 #251d18
+  collision_check = TRUE,
+  retain_first = FALSE,
   circle_clr = "#efcf34",
   clr_method = "segment",
   clr1 = "#3643AB",
@@ -79,6 +80,7 @@ my_plots <- tidyr::crossing(
   border_length = 0.1,
   current_time = current_time,
   plot_save = FALSE
+  show_ff = FALSE,
 ) %>%
   dplyr::mutate(row_num = dplyr::row_number()) %>% 
   purrr::pmap(call_everything)

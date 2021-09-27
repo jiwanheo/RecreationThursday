@@ -7,7 +7,8 @@ plotter <- function(background_clr,
                     circles, # circles is in plot friendly form
                     row_num,
                     line_alpha,
-                    clr_palette) 
+                    clr_palette,
+                    show_ff,
 {
   
   # Canvas size (bigger than flow field)
@@ -30,13 +31,15 @@ plotter <- function(background_clr,
               rep("right", 4))
   )
   
+  ff_helper <- if (show_ff) { ggplot2::geom_segment(data = flow_field_outline,
+                                                 ggplot2::aes(x = x,
+                                                              y = y,
+                                                              xend = xend,
+                                                              yend = yend),
+                                                 color = "#ffffff")} else{NULL}
+  
   ggplot2::ggplot() +
-    # ggplot2::geom_segment(data = flow_field_outline,
-    #                       ggplot2::aes(x = x,
-    #                                    y = y,
-    #                                    xend = xend,
-    #                                    yend = yend),
-    #                       color = "grey20") +
+    ff_helper +
     ggforce::geom_circle(data = circles,
                          ggplot2::aes(x0 = x0,
                                       y0 = y0,
