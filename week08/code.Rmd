@@ -1,0 +1,109 @@
+---
+title: "Week 8 #RecreationThursday"
+author: "Jiwan Heo"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load_library}
+library(tidyverse)
+library(ggforce)
+library(ggfittext)
+library(showtext)
+
+font_add_google("Rationale", "Rationale")
+showtext_auto()
+```
+
+```{r text_and_square_grid}
+gimmie_grid <- function(grid_length = 16, square_w = 2) { 
+  text_grid <- crossing(
+    x = seq(1, grid_length, by = square_w),
+    y = seq(1, grid_length, by = square_w)
+  ) %>% 
+    mutate(
+      big_x = x + square_w,
+      big_y = y + square_w,
+      group = row_number(),
+      clr = map_chr(x, ~sample(c("a", "b"), size = 1)),
+      label = map_chr(x, ~sample(c("BU", "EN", "KO", "RF", "DE", ""), size = 1)),
+      angle = map_dbl(x, ~sample(c(90, 180, 270, 360), size = 1)),
+    )
+  
+  polygon_grid <- text_grid %>% 
+    select(x1 = x, x2 = x, x3 = big_x, x4 = big_x, # Couldn't get 1 tibble to work for both text and squares :(
+           y1 = y, y2 = big_y, y3 = big_y, y4 = y,
+           clr,
+           label,
+           group) %>% 
+    pivot_longer(1:8) %>% 
+    mutate(name = str_remove(name, "\\d")) %>% 
+    pivot_wider(id_cols = c(group, clr), names_from = name, values_from = value, values_fn = list) %>% 
+    unnest(c(x, y))
+  
+  list(text_grid, polygon_grid)
+}
+
+my_grids <- gimmie_grid(grid_length = 16, square_w = 2)
+```
+
+```{r half_circles_in_blank_space}
+half_circles <- function(text_grid) {
+  text_grid %>% 
+    filter(label == "") %>% 
+    mutate(x0 = map2_dbl(x, big_x, ~sample(c(.x, .y), size = 1)),
+           y0 = (y+big_y)/2) %>% 
+    mutate(start = map2_dbl(x, x0, ~ifelse(.x == .y, 0, pi)),
+           end = map2_dbl(x, x0, ~ifelse(.x == .y, pi, 2*pi))) %>% 
+    select(x0, y0, start, end, clr) %>% 
+    mutate(clr = paste0("circle_", clr))
+}
+
+circle_locations <- half_circles(my_grids[[1]])
+```
+
+```{r}
+my_borders <- tibble(
+  x = c(0.5, 0.5, 17.5, 17.5, # manual frame, yikes
+        0.5, 0.5, 1, 1,
+        0.5, 0.5, 17.5, 17.5,
+        17, 17, 17.5, 17.5),
+  y = c(0.5, 1, 1, 0.5,
+        0.5, 17.5, 17.5, 0.5,
+        17, 17.5, 17.5, 17,
+        0.5, 17.5, 17.5, 0.5),
+  group = c(rep("bot", 4),
+            rep("left", 4),
+            rep("top", 4),
+            rep("right", 4))
+)
+```
+
+```{r put_it_all_together}
+p <- ggplot() +
+  geom_polygon(data = my_grids[[2]], aes(x = x, y = y, group = group, fill = clr), show.legend = FALSE) +
+  geom_fit_text(data = my_grids[[1]], aes(xmin = x, xmax = big_x, ymin = y, ymax = big_y, label = label, angle = angle, color = clr), 
+                family = "Rationale", grow = TRUE, show.legend = FALSE) +
+  geom_arc_bar(data = circle_locations, aes(x0 = x0, y0 = y0, r = 1, r0 = 0, start = start, end = end, fill = clr, color = clr), 
+               show.legend = FALSE) +
+  geom_path(data = my_grids[[2]], aes(x = x, y = y, group = group), show.legend = FALSE, size = 1.8, color = "#ffffff") +
+  geom_polygon(data = my_borders, aes(x = x, y = y, group = group), fill = "#ffffff") +
+  coord_equal(expand = FALSE) +
+  scale_fill_manual(values = c(a = "#4f4b4a", b = "#e3d9cd", circle_a = "#e3d9cd", circle_b = "#4f4b4a")) +
+  scale_color_manual(values = c(a = "#e3d9cd", b = "#4f4b4a", circle_a = "#e3d9cd", circle_b = "#4f4b4a")) +
+  theme_void()
+
+ggplot2::ggsave(
+  here::here("week08", "output.png"),
+  plot      = p,
+  device    = ragg::agg_png,
+  res       = 100,
+  units     = "in",
+  width     = 1000,
+  height    = 1000,
+  limitsize = FALSE
+)
+```
