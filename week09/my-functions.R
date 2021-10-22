@@ -1,7 +1,7 @@
 # returns a geom_polygon-friendly tibble that draws a square grid with gutter.
-generate_initial_grid_coords <- function(num_row, square_thickness=1, grid_thickness=0.2) {
+generate_initial_grid_coords <- function(num_rows, square_thickness=1, grid_thickness=0.2) {
   
-  small_coords <- accumulate(1:num_row, ~(.y*square_thickness) + grid_thickness*(.y-1))
+  small_coords <- accumulate(1:num_rows, ~(.y*square_thickness) + grid_thickness*(.y-1))
   big_coords   <- small_coords + square_thickness
   
   crossing(
@@ -44,6 +44,10 @@ get_gradient_points <- function(x, y, vertex, square_id, dat, n_lines) {
                              "top_r" = list(next_vertex = "bot_r", move_along = "y"),
                              "bot_r" = list(next_vertex = "bot_l", move_along = "x")
   )
+  
+  if(is.reactive(dat)) {
+    dat <- dat()
+  }
   
   target_criteria <- which(dat$vertex == target_direction$next_vertex & dat$square_id == square_id)
   target_loc <- dat[[target_criteria, target_direction$move_along]]
@@ -93,4 +97,49 @@ connect_gradient_points <- function(outer_points, shrunk_points, min_length) {
     mutate(new_xend = x + cos(angle) * new_length,
            new_yend = y + sin(angle) * new_length) %>% 
     select(-c(xend, yend, max_length, new_length))
+}
+
+
+# This just calls all the above, and return the dfs in a list
+generate_output <- function(num_rows, n_lines) {
+  outer_grid <- generate_initial_grid_coords(num_row = num_rows)
+  
+  shrunk_grid <- outer_grid %>% 
+    transmute(new_x_coords = map2(x, xend, shrink_grid_coords, shrink_by = 0.5, x_or_y = "x"),
+              new_y_coords = map2(y, yend, shrink_grid_coords, shrink_by = 0.5, x_or_y = "y")) %>% 
+    unnest_wider(new_x_coords) %>% 
+    unnest_wider(new_y_coords)
+  
+  outer_grid_plot_ready <- outer_grid %>% 
+    mutate(square_id = row_number()) %>% 
+    pmap_dfr(make_vertices)
+  
+  shrunk_grid_plot_ready <- shrunk_grid %>% 
+    mutate(square_id = row_number()) %>% 
+    pmap_dfr(make_vertices)
+  
+  outer_gradient_points <- outer_grid_plot_ready %>% 
+    pmap(get_gradient_points, dat = outer_grid_plot_ready, n_lines = n_lines)
+  
+  shrunk_gradient_points <- shrunk_grid_plot_ready %>% 
+    pmap(get_gradient_points, dat = shrunk_grid_plot_ready, n_lines = n_lines)
+  
+  gradient_lines <- connect_gradient_points(outer_gradient_points, shrunk_gradient_points, min_length = 0.4)
+  
+  list(
+    outer_grid_plot_ready = outer_grid_plot_ready,
+    shrunk_grid_plot_ready = shrunk_grid_plot_ready,
+    gradient_lines = gradient_lines
+  )
+}
+
+# Shiny functions----
+
+labeled_input <- function(id, class = NULL, label, input) {
+  div(
+    id = id,
+    class = class,
+    span(label, style = "font-size: 0.8rem;"),
+    input
+  )
 }

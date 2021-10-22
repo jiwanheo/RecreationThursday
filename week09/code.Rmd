@@ -20,7 +20,7 @@ We're going to gradient-fill the space between the inner and the outer square.
 
 
 ```{r}
-outer_grid <- generate_initial_grid_coords(num_row = 5, square_thickness = 1, grid_thickness = 0.2)
+outer_grid <- generate_initial_grid_coords(num_row = 5)
 
 shrunk_grid <- outer_grid %>% 
   transmute(new_x_coords = map2(x, xend, shrink_grid_coords, shrink_by = 0.5, x_or_y = "x"),
