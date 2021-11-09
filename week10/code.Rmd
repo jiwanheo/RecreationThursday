@@ -1,0 +1,106 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Polygon Generation
+```{r}
+library(tidyverse)
+library(TSP)
+set.seed(1)
+
+clrs <- list(
+  "#21447c",
+  "#bdcbb3",
+  "#6591bf",
+  "#689582",
+  "#444772",
+  "#e5c93e",
+  "#d8b244",
+  "#af6024",
+  "#953026",
+  "#4b2b3c",
+  "#a7cbd5",
+  "#a96491"
+)
+
+clrs <- setNames(clrs, str_remove(paste0("clr_", clrs), "#"))
+
+generate_initial_grid <- function(x_by = 5, y_by = 8) {
+  initial_df <- crossing(
+  x = seq(0, 100, by = x_by),
+  y = seq(0, 200, by = y_by)
+) %>% 
+  mutate(xend = x + x_by,
+         yend = y + y_by,
+         g = row_number())
+}
+
+rando_points <- function(x, y, xend, yend, g) {
+  tibble(
+    x = runif(n = 10, min = x, max = xend), 
+    y = runif(n = 10, min = y, max = yend), 
+    g = g 
+  )
+}
+
+tour <- function(obj) {
+  obj$tour <- unname(c(solve_TSP(ETSP(obj[, c("x", "y")]))))
+  arrange(obj, order(tour))
+}
+
+initial_df <- generate_initial_grid()
+
+tsp_polygons <- initial_df %>% 
+  pmap_dfr(rando_points) %>% 
+  tour()
+```
+
+# Clr mapping
+```{r}
+starting_clr <- "clr_bdcbb3"
+clr_container <- vector("numeric", length = length(unique(tsp_polygons$g)))
+for(i in 1:length(unique(tsp_polygons$g))) {
+  if(i == 1) {
+    next_clr <- sample(c(starting_clr, sample(names(clrs), 1)), size = 1, prob = c(0.9, 0.1))
+  }
+  else {
+    next_clr <- sample(c(next_clr, sample(names(clrs), 1)), size = 1, prob = c(0.9, 0.1))
+  }
+  clr_container[[i]] <- next_clr
+}
+
+clr_df <- tibble(
+  clr = clr_container
+) %>% 
+  mutate(g = row_number())
+
+p <- tsp_polygons %>% 
+  left_join(clr_df, by = "g") %>% 
+  ggplot(aes(x = x, y = y, group = g, fill = clr)) +
+  geom_polygon(show.legend = FALSE) +
+  coord_equal(expand = FALSE) +
+  scale_fill_manual(values = clrs) +
+  theme_void() +
+  theme(
+    plot.background = element_rect(fill = "#f7f5f0", color = "#f7f5f0"),
+    plot.margin = unit(c(1,1,1,1), "in")
+  )
+```
+
+# Save
+```{r}
+# ggsave(
+#   here::here("week10", "output.png"),
+#   p,
+#   device = ragg::agg_png
+# )
+# 
+# img <- magick::image_read(here::here("week10", "output.png"))
+# img %>% magick::image_trim() %>% magick::image_write(here::here("week10", "output.png"))
+```
+
